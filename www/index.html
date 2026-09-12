@@ -961,11 +961,12 @@ function gate(n){
 /* 큰 모델이 끝내 안 되면 한 단계 가벼운 모델로 내려가 다시 시도한다.
    아홉이 성공했는데 한 자리 때문에 전부 버리는 일을 막는다. */
 const FALLBACK = {
-  'claude-fable-5-1': 'claude-opus-5',
-  'claude-opus-5':    'claude-sonnet-5',
-  'claude-sonnet-5':  'claude-haiku-4-5-20251001',
+  'claude-fable-5-1':  'claude-opus-5',
+  'claude-opus-5':     'claude-sonnet-5',
+  'claude-sonnet-5':   'claude-sonnet-4-6',          // 이름이 안 맞으면 이전 판으로
+  'claude-sonnet-4-6': 'claude-haiku-4-5-20251001',
 };
-function makeCaller(onFallback){
+function makeCaller(onFallback, onRetry){
   const g=gate(3), TOP=new Set(['geomjeung','pyeonjip','myeongsik']);
   return async ({system,user,agent})=>g(async()=>{
     // 고른 모델을 상위 단계에 쓰고, '하위는 Haiku' 옵션이 켜져 있으면 나머지는 Haiku로 돌린다
@@ -984,7 +985,7 @@ function makeCaller(onFallback){
     const slow = /opus|fable|mythos/.test(model);
     const budget = slow ? 240000 : 120000;
     let last;
-    for(let k=0;k<=3;k++){
+    for(let k=0;k<=2;k++){
       const ctrl = new AbortController();
       const timer = setTimeout(()=>ctrl.abort(), budget);
       try{
@@ -999,6 +1000,7 @@ function makeCaller(onFallback){
         clearTimeout(timer);
         if(res.status===429||res.status>=500){
           last=new Error('서버가 바쁩니다 ('+res.status+')');
+          if(onRetry) onRetry(agent, k+1, last.message);
           await new Promise(r=>setTimeout(r,1500*Math.pow(2,k))); continue;
         }
         const data=await res.json();
@@ -1010,7 +1012,8 @@ function makeCaller(onFallback){
         // 네트워크가 끊기거나 시간이 다 된 경우도 다시 시도한다. 폰에서 흔하다.
         const net = e.name==='AbortError' || /Failed to fetch|NetworkError|Load failed/i.test(e.message||'');
         last = e.name==='AbortError' ? new Error('응답이 너무 오래 걸립니다') : e;
-        if(!net || k===3) throw last;
+        if(!net || k===2) throw last;
+        if(onRetry) onRetry(agent, k+1, last.message);
         await new Promise(r=>setTimeout(r,1500*Math.pow(2,k)));
       }
     }
@@ -1029,11 +1032,18 @@ function progressBox(host){
     start(names){ names.forEach(n=>{ if(lines[n]) return;
       const l=el('div','pl run'); l.append(el('span','dt'), el('span','', n));
       lines[n]=l; box.append(l); }); },
-    done(name, ok, why){ const l=lines[name];
+    done(name, ok, why){
+      if(!lines[name]){ const l2=el('div','pl'); l2.append(el('span','dt'), el('span','',name));
+        lines[name]=l2; box.append(l2); }
+      const l=lines[name];
       if(l){ l.className='pl '+(ok?'ok':'bad');
         if(!ok&&why){ const s=el('span','');
           s.style.cssText='color:var(--hwa);font-size:11px;margin-left:4px';
           s.textContent='— '+String(why).slice(0,40); l.append(s); } } },
+    retry(name, n, why){ const l=lines[name];
+      if(l){ let s=l.querySelector('.rt');
+        if(!s){ s=el('span','rt'); s.style.cssText='color:var(--to);font-size:11px;margin-left:4px'; l.append(s); }
+        s.textContent='— '+n+'번째 재시도 ('+String(why).slice(0,24)+')'; } },
     swap(name, from, to){ const l=lines[name];
       if(l){ const s=el('span','');
         s.style.cssText='color:var(--faint);font-size:11px;margin-left:4px';
@@ -1159,7 +1169,7 @@ function askPanel(kind, host){
     try{
       const mn = m => (MODELS.find(x=>x.id===m)||{}).이름 || m;
       pg.note('모델: ' + mn(CFG.model));
-      const call=makeCaller((a,f,t)=>pg.swap(a,f,t));
+      const call=makeCaller((a,f,t)=>pg.swap(a,f,t),(a,n,w)=>pg.retry(a,n,w));
       const res=await S.orch.runConsult(kind==='gung'?'match':'natal',
         kind==='gung'?lastM:lastR, q, call, {
           history: askHistory[kind],
@@ -1228,7 +1238,9 @@ function aiPanel(kind){
       } else {
         const mn = m => (MODELS.find(x=>x.id===m)||{}).이름 || m;
         pg.note('모델: ' + mn(CFG.model) + (CFG.cheap ? ' (하위는 Haiku 4.5)' : ' (전부 이 모델)'));
-        const call=makeCaller((agent,from,to)=>pg.swap(AGENT_NAMES[agent]||agent, from, to));
+        const call=makeCaller(
+          (agent,from,to)=>pg.swap(AGENT_NAMES[agent]||agent, from, to),
+          (agent,n,why)=>pg.retry(AGENT_NAMES[agent]||agent, n, why));
         const onProgress=e=>{
           if(e.type==='wave-start') pg.start(e.agents);
           if(e.type==='agent-done') pg.done(AGENT_NAMES[e.id]||e.name, e.ok, e.사유);

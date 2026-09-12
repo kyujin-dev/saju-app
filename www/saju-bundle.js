@@ -4077,6 +4077,7 @@ async function runWave(agents, makePacket, callLLM, onProgress, opts) {
     const out = await runAgent(a, makePacket(a), callLLM, opts);
     onProgress && onProgress({ type: 'agent-done', id: a.id, name: a.name, ms: Date.now() - s,
                                ok: !out.__error,
+                               사유: out.__error ? String(out.__error).replace(/^.*실패:\s*/,'') : null,
                                note: out.__unparsed ? '형식 어긋남(내용은 살림)'
                                    : out.__repaired ? '잘린 것 복구' : null });
     return [a.id, out];
@@ -4087,6 +4088,34 @@ async function runWave(agents, makePacket, callLLM, onProgress, opts) {
 
 /** 검증관·편집장에게 넘길 요약본. 앞선 결과를 통째로 넘기면 입력 토큰이 폭증한다
     (실측 14.9만 토큰 중 대부분이 이 두 단계였다). */
+/** 편집장이 실패했을 때, 앞 단계 결과만으로 읽을 만한 글을 만든다.
+    아홉이 다 성공했는데 마지막 하나 때문에 전부 버리는 것은 아깝다. */
+function fallbackReport(all, title) {
+  const NAME = { myeongsik:'타고난 구조', seongjeong:'기질', jaemul:'재물',
+    jigeop:'직업·명예', aejeong:'관계', geongang:'건강',
+    daeun:'대운 흐름', seun:'다가오는 해', jeollyak:'시기 전략',
+    gunghap_a:'A가 보는 관계', gunghap_b:'B가 보는 관계', gwangye:'관계의 역학' };
+  const 본문 = [], 실행 = [];
+  for (const [id, v] of Object.entries(all)) {
+    if (!v || v.__error || !NAME[id]) continue;
+    const parts = [];
+    if (v.요약) parts.push(String(v.요약));
+    for (const [k, arr] of Object.entries(v)) {
+      if (!Array.isArray(arr) || !arr.length || k === '실행제안' || k === '지금할것') continue;
+      arr.slice(0, 3).forEach(x => {
+        if (typeof x === 'string') parts.push('· ' + x);
+        else if (x && (x.제목 || x.내용)) parts.push('· ' + [x.제목, x.내용].filter(Boolean).join(' — '));
+      });
+    }
+    if (parts.length) 본문.push({ 섹션: NAME[id], 내용: parts.join('\n') });
+    for (const k of ['실행제안', '지금할것', '해볼것'])
+      (v[k] || []).slice(0, 2).forEach(x => 실행.push(x));
+  }
+  return { 제목: title, 한줄요약: '', 본문, 실행요약: 실행.slice(0, 6),
+    한계: '마지막 정리 단계가 끝나지 않아 각 분석가의 결과를 그대로 이어 붙였습니다. ' +
+          '다시 풀면 하나로 다듬어진 글을 받을 수 있습니다.' };
+}
+
 function digest(all) {
   const out = {};
   for (const [id, v] of Object.entries(all)) {
@@ -4126,6 +4155,7 @@ async function runReading(reading, callLLM, opts = {}) {
 
   // AI 교차검증
   const vAgent = AGENTS.find(a => a.id === 'geomjeung');
+  onProgress && onProgress({ type: 'wave-start', agents: ['교차 검증관'] });
   const verify = await runAgent(vAgent,
     { 원본재료요약: { 강약: reading.strength.level, 용신: reading.yongsin.primary.group,
                       격국: reading.격국.name, 세력: reading.groupPower },
@@ -4136,7 +4166,8 @@ async function runReading(reading, callLLM, opts = {}) {
 
   // 편집
   const eAgent = AGENTS.find(a => a.id === 'pyeonjip');
-  const final = await runAgent(eAgent,
+  onProgress && onProgress({ type: 'wave-start', agents: ['편집장'] });
+  let final = await runAgent(eAgent,
     { __prior: digest(all), 검증지적: allIssues.slice(0, 8),
       원본핵심: { 원국: reading.base.chart, 강약: reading.strength.level,
                   용신: reading.yongsin.primary.group, 격국: reading.격국.name,
@@ -4147,6 +4178,9 @@ async function runReading(reading, callLLM, opts = {}) {
                   현재나이: reading.현재나이, 세는나이: reading.세는나이 },
       필수반영: '검증지적에 적힌 수정 지시는 반드시 본문에 반영해서 쓸 것' }, callLLM, opts);
   onProgress && onProgress({ type: 'agent-done', id: 'pyeonjip', name: '편집장', ok: !final.__error });
+
+  // 편집장이 실패해도 앞 아홉의 결과는 살린다
+  if (final.__error) final = fallbackReport(all, '사주 풀이');
 
   // 편집 결과도 가드
   const finalIssues = final.__error ? [] : guard('pyeonjip', final, facts, nums, keyed);
@@ -4185,6 +4219,7 @@ async function runMatch(match, callLLM, opts = {}) {
   for (const [id, obj] of Object.entries(w3)) if (!obj.__error) issues.push(...guard(id, obj, facts, nums, keyed));
 
   const vAgent = AGENTS.find(a => a.id === 'geomjeung');
+  onProgress && onProgress({ type: 'wave-start', agents: ['교차 검증관'] });
   const verify = await runAgent(vAgent,
     { 원본재료요약: { 총점: match.궁합.총점, 위치: match.궁합.위치, 등급: match.궁합.등급,
                       A입장: match.궁합.A입장, B입장: match.궁합.B입장,
@@ -4192,13 +4227,15 @@ async function runMatch(match, callLLM, opts = {}) {
       __prior: digest(all), 코드가드지적: issues }, callLLM, opts);
 
   const eAgent = AGENTS.find(a => a.id === 'pyeonjip');
-  const final = await runAgent(eAgent,
+  onProgress && onProgress({ type: 'wave-start', agents: ['편집장'] });
+  let final = await runAgent(eAgent,
     { __prior: digest(all), 검증지적: [...issues, ...((verify.지적)||[])].slice(0, 8),
       원본핵심: { 총점: match.궁합.총점, 위치: match.궁합.위치, 등급: match.궁합.등급,
                   A: match.궁합.A입장, B: match.궁합.B입장,
                   유형: match.궁합.관계유형, 비대칭: match.궁합.비대칭 },
       모드: '궁합' }, callLLM, opts);
 
+  if (final.__error) final = fallbackReport(all, '궁합 풀이');
   const finalIssues = final.__error ? [] : guard('pyeonjip', final, facts, nums, keyed);
   return { 에이전트: all, 검증: { 코드가드: issues, AI검증: verify, 최종가드: finalIssues },
            결과: final,
@@ -4225,7 +4262,8 @@ async function runFortune(reading, callLLM, opts = {}) {
   for (const [id, obj] of Object.entries(w)) if (!obj.__error) issues.push(...guard(id, obj, facts, nums, keyed));
 
   const eAgent = AGENTS.find(a => a.id === 'pyeonjip');
-  const final = await runAgent(eAgent,
+  onProgress && onProgress({ type: 'wave-start', agents: ['편집장'] });
+  let final = await runAgent(eAgent,
     { __prior: digest(w), 검증지적: issues.slice(0, 6),
       원본핵심: { ...명식요약,
         대운표: reading.대운.map(d => `${d.시작나이}~${d.끝나이}세 ${d.간지} ${d.종합}`),
@@ -4234,6 +4272,7 @@ async function runFortune(reading, callLLM, opts = {}) {
       모드: '운세만 — 타고난 구조는 짧게 한 문단으로 줄이고 시간 흐름 위주로 쓸 것' },
     callLLM, opts);
   onProgress && onProgress({ type:'agent-done', id:'pyeonjip', name:'편집장', ok: !final.__error });
+  if (final.__error) final = fallbackReport(w, '운의 흐름');
   const finalIssues = final.__error ? []
     : guard('pyeonjip', final, facts, nums, keyed)
         .concat(checkAdvice(final.실행요약, 'pyeonjip'))

@@ -466,7 +466,7 @@ section{animation:in .3s cubic-bezier(.2,.7,.3,1) both}
   </div>
 
   <div class="sgroup">
-    <div class="slb">쓸 모델</div>
+    <div class="slb">쓸 모델 <span class="sopt" id="curModel"></span></div>
     <div class="models" id="modelList"></div>
   </div>
 
@@ -526,6 +526,8 @@ function closeSheet(){ $('#dim').classList.remove('on'); $('#sheet').classList.r
 /* 설정 — 한 곳에서만 관리한다 */
 function drawModels(){
   const box=$('#modelList'); box.innerHTML='';
+  const cur=(MODELS.find(x=>x.id===CFG.model)||{}).이름||CFG.model;
+  $('#curModel').textContent='지금 '+cur;
   MODELS.forEach(m=>{
     const b=el('button','mdl');
     b.setAttribute('aria-pressed', String(m.id===CFG.model));
@@ -542,7 +544,11 @@ function openSettings(){
   $('#dim').classList.add('on'); $('#setSheet').classList.add('on');
   setTimeout(()=>$('#setKey').focus(),250);
 }
-function markGear(){ $('#gearBtn').classList.toggle('need', !CFG.ready); }
+function markGear(){
+  $('#gearBtn').classList.toggle('need', !CFG.ready);
+  const nm=(MODELS.find(x=>x.id===CFG.model)||{}).이름;
+  $('#gearBtn').textContent = CFG.ready && nm ? nm : '설정';
+}
 function hintable(node, kind, value){
   node.classList.add('hint');
   node.tabIndex = 0;
@@ -941,8 +947,8 @@ const CFG = {
 const MODELS = [
   { id:'claude-haiku-4-5-20251001', 이름:'Haiku 4.5', 설명:'가장 빠르고 저렴', 특징:'빠름' },
   { id:'claude-sonnet-5',           이름:'Sonnet 5',  설명:'속도와 품질의 균형', 특징:'기본' },
-  { id:'claude-opus-5',             이름:'Opus 5',    설명:'복잡한 해석에 강함', 특징:'정밀' },
-  { id:'claude-fable-5-1',          이름:'Fable 5.1', 설명:'가장 앞선 모델', 특징:'최상' },
+  { id:'claude-opus-5',             이름:'Opus 5',    설명:'깊이 있지만 오래 걸립니다', 특징:'정밀·느림' },
+  { id:'claude-fable-5-1',          이름:'Fable 5.1', 설명:'가장 앞서지만 가장 느립니다', 특징:'최상·느림' },
 ];
 
 function gate(n){
@@ -952,27 +958,64 @@ function gate(n){
     fn().then(res,rej).finally(()=>{active--;pump();}); };
   return fn=>new Promise((res,rej)=>{q.push({fn,res,rej});pump();});
 }
-function makeCaller(){
+/* 큰 모델이 끝내 안 되면 한 단계 가벼운 모델로 내려가 다시 시도한다.
+   아홉이 성공했는데 한 자리 때문에 전부 버리는 일을 막는다. */
+const FALLBACK = {
+  'claude-fable-5-1': 'claude-opus-5',
+  'claude-opus-5':    'claude-sonnet-5',
+  'claude-sonnet-5':  'claude-haiku-4-5-20251001',
+};
+function makeCaller(onFallback){
   const g=gate(3), TOP=new Set(['geomjeung','pyeonjip','myeongsik']);
   return async ({system,user,agent})=>g(async()=>{
     // 고른 모델을 상위 단계에 쓰고, '하위는 Haiku' 옵션이 켜져 있으면 나머지는 Haiku로 돌린다
     const main = CFG.model;
-    const model = TOP.has(agent) || !CFG.cheap ? main : 'claude-haiku-4-5-20251001';
-    for(let k=0;k<=2;k++){
-      const res=await fetch('https://api.anthropic.com/v1/messages',{
-        method:'POST',
-        headers:{'content-type':'application/json','x-api-key':CFG.key,
-          'anthropic-version':'2023-06-01',
-          'anthropic-dangerous-direct-browser-access':'true'},
-        body:JSON.stringify({model,max_tokens:12000,system,
-          messages:[{role:'user',content:user}]})
-      });
-      if(res.status===429||res.status>=500){ await new Promise(r=>setTimeout(r,1200*Math.pow(2,k))); continue; }
-      const data=await res.json();
-      if(data.error) throw new Error(data.error.message);
-      return (data.content||[]).map(c=>c.type==='text'?c.text:'').join('\n');
+    const first = TOP.has(agent) || !CFG.cheap ? main : 'claude-haiku-4-5-20251001';
+    try { return await call(first); }
+    catch(e){
+      const alt = FALLBACK[first];
+      if(!alt) throw e;
+      if(onFallback) onFallback(agent, first, alt);
+      return await call(alt);      // 가벼운 모델로 한 번 더
     }
-    throw new Error('호출이 반복 실패했습니다');
+
+    async function call(model){
+    // 큰 모델은 오래 걸린다. 폰에서는 연결이 끊기기도 해서 넉넉히 기다리고 여러 번 시도한다.
+    const slow = /opus|fable|mythos/.test(model);
+    const budget = slow ? 240000 : 120000;
+    let last;
+    for(let k=0;k<=3;k++){
+      const ctrl = new AbortController();
+      const timer = setTimeout(()=>ctrl.abort(), budget);
+      try{
+        const res=await fetch('https://api.anthropic.com/v1/messages',{
+          method:'POST', signal: ctrl.signal,
+          headers:{'content-type':'application/json','x-api-key':CFG.key,
+            'anthropic-version':'2023-06-01',
+            'anthropic-dangerous-direct-browser-access':'true'},
+          body:JSON.stringify({model, max_tokens: slow?8000:12000, system,
+            messages:[{role:'user',content:user}]})
+        });
+        clearTimeout(timer);
+        if(res.status===429||res.status>=500){
+          last=new Error('서버가 바쁩니다 ('+res.status+')');
+          await new Promise(r=>setTimeout(r,1500*Math.pow(2,k))); continue;
+        }
+        const data=await res.json();
+        if(data.error) throw new Error((data.error.type||'')+': '+(data.error.message||''));
+        if(!res.ok) throw new Error('HTTP '+res.status);
+        return (data.content||[]).map(c=>c.type==='text'?c.text:'').join('\n');
+      }catch(e){
+        clearTimeout(timer);
+        // 네트워크가 끊기거나 시간이 다 된 경우도 다시 시도한다. 폰에서 흔하다.
+        const net = e.name==='AbortError' || /Failed to fetch|NetworkError|Load failed/i.test(e.message||'');
+        last = e.name==='AbortError' ? new Error('응답이 너무 오래 걸립니다') : e;
+        if(!net || k===3) throw last;
+        await new Promise(r=>setTimeout(r,1500*Math.pow(2,k)));
+      }
+    }
+    throw last||new Error('호출이 반복 실패했습니다');
+    }
   });
 }
 
@@ -986,8 +1029,19 @@ function progressBox(host){
     start(names){ names.forEach(n=>{ if(lines[n]) return;
       const l=el('div','pl run'); l.append(el('span','dt'), el('span','', n));
       lines[n]=l; box.append(l); }); },
-    done(name, ok){ const l=lines[name]; if(l){ l.className='pl '+(ok?'ok':'bad'); } },
+    done(name, ok, why){ const l=lines[name];
+      if(l){ l.className='pl '+(ok?'ok':'bad');
+        if(!ok&&why){ const s=el('span','');
+          s.style.cssText='color:var(--hwa);font-size:11px;margin-left:4px';
+          s.textContent='— '+String(why).slice(0,40); l.append(s); } } },
+    swap(name, from, to){ const l=lines[name];
+      if(l){ const s=el('span','');
+        s.style.cssText='color:var(--faint);font-size:11px;margin-left:4px';
+        s.textContent='— '+to.replace(/claude-|-\d.*$/g,'')+'로 바꿔 재시도';
+        l.append(s); } },
     msg(t){ const l=el('div','pl run'); l.append(el('span','dt'), el('span','',t)); box.append(l); return l; },
+    note(t){ const l=el('div','pl'); l.style.color='var(--faint)'; l.style.fontSize='12px';
+      l.append(el('span','dt'), el('span','',t)); box.append(l); },
   };
 }
 
@@ -1103,7 +1157,9 @@ function askPanel(kind, host){
     send.disabled=true; send.textContent='생각 중';
     const pg=progressBox(out);
     try{
-      const call=makeCaller();
+      const mn = m => (MODELS.find(x=>x.id===m)||{}).이름 || m;
+      pg.note('모델: ' + mn(CFG.model));
+      const call=makeCaller((a,f,t)=>pg.swap(a,f,t));
       const res=await S.orch.runConsult(kind==='gung'?'match':'natal',
         kind==='gung'?lastM:lastR, q, call, {
           history: askHistory[kind],
@@ -1170,11 +1226,14 @@ function aiPanel(kind){
         if(d.error) throw new Error(d.error);
         res={ 결과:d.해석, 품질:d.품질 };
       } else {
-        const call=makeCaller();
+        const mn = m => (MODELS.find(x=>x.id===m)||{}).이름 || m;
+        pg.note('모델: ' + mn(CFG.model) + (CFG.cheap ? ' (하위는 Haiku 4.5)' : ' (전부 이 모델)'));
+        const call=makeCaller((agent,from,to)=>pg.swap(AGENT_NAMES[agent]||agent, from, to));
         const onProgress=e=>{
           if(e.type==='wave-start') pg.start(e.agents);
-          if(e.type==='agent-done') pg.done(AGENT_NAMES[e.id]||e.name, e.ok);
+          if(e.type==='agent-done') pg.done(AGENT_NAMES[e.id]||e.name, e.ok, e.사유);
         };
+        pg.note('큰 모델은 마지막 정리에 1~2분 더 걸립니다');
         if(kind==='saju') res = await S.orch.runReading(lastR, call, {onProgress});
         else if(kind==='unse') res = await S.orch.runFortune(lastR, call, {onProgress});
         else if(kind==='gung') res = await S.orch.runMatch(lastM, call, {onProgress});

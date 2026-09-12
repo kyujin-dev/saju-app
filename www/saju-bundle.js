@@ -2601,13 +2601,46 @@ function fullMatrix(a, b) {
 /* ---------- 2. 궁위별 궁합 ----------
    같은 자리끼리 비교한다. 연주는 집안, 월주는 가치관·환경, 일주는 본인,
    시주는 자식·노후. 어느 층에서 맞고 어긋나는지가 관계의 성격을 정한다. */
-const GUNG_MEAN = [
+/* 자리의 뜻은 관계에 따라 달라진다.
+   남매 사이에 "배우자궁", "자식 양육관"이라고 쓰면 읽는 사람이 당황한다. */
+const GUNG_BASE = [
   { 주:'연주', 뜻:'집안·성장 배경', 좋:'집안 분위기와 어른들 사이가 무난하다', 나쁨:'집안 배경과 가치관 차이에서 마찰이 난다' },
   { 주:'월주', 뜻:'사회적 환경·가치관', 좋:'일하는 방식과 생활 리듬이 잘 맞는다', 나쁨:'돈 쓰는 법, 일하는 방식에서 자주 부딪힌다' },
   { 주:'일주', 뜻:'본인·배우자궁', 좋:'속이 잘 맞고 함께 있을 때 편안하다', 나쁨:'가장 가까운 자리에서 부딪혀 체감이 크다' },
   { 주:'시주', 뜻:'자식·노후', 좋:'자식 문제와 미래 계획에서 뜻이 모인다', 나쁨:'자식 양육관과 노후 계획이 엇갈린다' },
 ];
-function gungByGung(a, b) {
+const GUNG_BY_REL = {
+  '형제·자매': {
+    연주: { 뜻:'같은 집안·자란 환경', 좋:'같은 집에서 자란 결이 비슷해 말이 통한다', 나쁨:'같은 집에서 자랐어도 받아들인 것이 서로 달랐다' },
+    일주: { 뜻:'각자의 본바탕', 좋:'기질이 닮아 서로를 쉽게 알아본다', 나쁨:'가장 가까운 자리에서 부딪혀 비교와 경쟁이 잦다' },
+    시주: { 뜻:'말년과 남기는 것', 좋:'나중 일을 두고 뜻이 모인다', 나쁨:'부모 돌봄이나 재산 문제에서 생각이 갈린다' },
+  },
+  '부모·자식': {
+    연주: { 뜻:'집안의 뿌리', 좋:'집안 내력이 순하게 이어진다', 나쁨:'윗대의 방식을 두고 생각이 갈린다' },
+    일주: { 뜻:'각자의 본바탕', 좋:'속이 잘 맞아 편하게 지낸다', 나쁨:'가장 가까운 자리에서 부딪혀 잔소리와 반발이 오간다' },
+    시주: { 뜻:'뒷날과 돌봄', 좋:'앞날을 두고 뜻이 모인다', 나쁨:'독립과 돌봄의 시점을 두고 생각이 어긋난다' },
+  },
+  친구: {
+    일주: { 뜻:'각자의 본바탕', 좋:'같이 있으면 편하고 말이 잘 통한다', 나쁨:'가까이 지낼수록 결이 어긋나는 면이 드러난다' },
+    시주: { 뜻:'오래 볼 수 있는가', 좋:'시간이 지나도 이어질 결이 있다', 나쁨:'시기가 지나면 멀어지기 쉬운 구석이 있다' },
+  },
+  동업: {
+    연주: { 뜻:'배경과 출신', 좋:'서로의 배경이 부딪히지 않는다', 나쁨:'서로 다른 판에서 와서 기준이 어긋난다' },
+    일주: { 뜻:'각자의 본바탕', 좋:'일하는 결이 맞아 손발이 맞는다', 나쁨:'가장 가까운 자리에서 부딪혀 주도권 다툼이 생긴다' },
+    시주: { 뜻:'마무리와 나눔', 좋:'끝맺음과 배분에서 뜻이 모인다', 나쁨:'정산과 마무리에서 생각이 갈린다' },
+  },
+  가족: {
+    일주: { 뜻:'각자의 본바탕', 좋:'속이 잘 맞아 함께 있을 때 편안하다', 나쁨:'가장 가까운 자리에서 부딪혀 체감이 크다' },
+    시주: { 뜻:'말년과 남기는 것', 좋:'나중 일을 두고 뜻이 모인다', 나쁨:'돌봄과 재산 문제에서 생각이 갈린다' },
+  },
+};
+function gungMeanOf(relation) {
+  const over = GUNG_BY_REL[relation];
+  if (!over) return GUNG_BASE;
+  return GUNG_BASE.map(g => over[g.주] ? { ...g, ...over[g.주] } : g);
+}
+function gungByGung(a, b, relation) {
+  const GUNG_MEAN = gungMeanOf(relation);
   const pa = pillarsOf(a.saju), pb = pillarsOf(b.saju);
   const n = Math.min(pa.length, pb.length);
   const rows = [];
@@ -2926,7 +2959,8 @@ function balanceRel(a, b) {
 }
 
 /* ---------- 연지(겉궁합) ---------- */
-function yeonjiRel(a, b) {
+function yeonjiRel(a, b, relation) {
+  const 혼사 = ['연애','부부'].includes(relation);
   const ja = a.saju.year.ji, jb = b.saju.year.ji;
   if (R.YUKHAP.some(([x,y]) => (x===ja&&y===jb)||(y===ja&&x===jb)))
     return { v:1.0, 관계:`${R.J[ja]}${R.J[jb]} 육합`, 해설:'띠가 합한다 — 첫인상과 주변 시선이 무난하다' };
@@ -2934,7 +2968,10 @@ function yeonjiRel(a, b) {
     if ([s,w,g].includes(ja) && [s,w,g].includes(jb) && ja!==jb)
       return { v:0.9, 관계:`${R.J[ja]}${R.J[jb]} 삼합`, 해설:'흔히 말하는 잘 맞는 띠다' };
   if (R.JIJI_CHUNG.some(([x,y]) => (x===ja&&y===jb)||(y===ja&&x===jb)))
-    return { v:-0.6, 관계:`${R.J[ja]}${R.J[jb]} 충`, 해설:'띠끼리 충 — 집안 어른들이 꺼리는 조합이지만 여덟 글자 중 한 글자일 뿐이다' };
+    return { v:-0.6, 관계:`${R.J[ja]}${R.J[jb]} 충`,
+      해설: 혼사
+        ? '띠끼리 충 — 집안 어른들이 꺼리는 조합이지만 여덟 글자 중 한 글자일 뿐이다'
+        : '띠끼리 충 — 겉으로 드러나는 결이 서로 반대쪽이다. 여덟 글자 중 한 글자일 뿐이니 크게 볼 것은 아니다' };
   if (R.WONJIN[ja] === jb)
     return { v:-0.7, 관계:`${R.J[ja]}${R.J[jb]} 원진`, 해설:'띠 원진 — 겉으로 드러나는 마찰이 있다' };
   return { v:0, 관계:'무관', 해설:'띠로는 특별한 작용이 없다' };
@@ -2966,14 +3003,14 @@ function compatibility(a, b, opts = {}) {
   const WW = PROFILES[관계종류];
   const ilgan = ilganRel(a, b);
   const ilji  = iljiRel(a, b);
-  const yeon  = yeonjiRel(a, b);
+  const yeon  = yeonjiRel(a, b, 관계종류);
   const ysA   = yongsinSupply(a, b);
   const ysB   = yongsinSupply(b, a);
   const ssA   = sipseongRel(a, b, a.gender, 관계종류);
   const ssB   = sipseongRel(b, a, b.gender, 관계종류);
   const bal   = balanceRel(a, b);
   const mat   = D.fullMatrix(a, b);
-  const gung  = D.gungByGung(a, b);
+  const gung  = D.gungByGung(a, b, 관계종류);
   const risk  = D.romanceRisk(a, b);
 
   const to100 = v => Math.round(Math.max(0, Math.min(100, (v + 1) / 2 * 100)));

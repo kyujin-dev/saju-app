@@ -461,11 +461,10 @@ section{animation:in .3s cubic-bezier(.2,.7,.3,1) both}
 <div class="sheet" id="imgSheet" role="dialog" aria-modal="true" aria-labelledby="imgTitle">
   <div class="grip"></div>
   <h3 id="imgTitle">그림으로 저장</h3>
-  <p class="shint" style="margin-bottom:12px">그림을 <b>길게 눌러</b> "이미지 저장"을 고르면 사진첩에 들어갑니다.
-    아래 버튼으로 내려받을 수도 있습니다.</p>
+  <p class="shint" style="margin-bottom:12px;font-size:14px;color:var(--ink)">
+    그림을 <b>길게 누른 뒤</b> "이미지 저장"을 고르세요. 사진첩에 들어갑니다.</p>
   <div id="imgBox" style="max-height:52vh;overflow:auto;border-radius:14px;background:var(--sunk)"></div>
-  <a id="imgDl" class="go" style="width:100%;display:block;text-align:center;margin-top:12px;
-     text-decoration:none;line-height:1.4">내려받기</a>
+  <p class="shint" style="margin-top:10px">저장이 안 되면 화면을 캡처하셔도 됩니다.</p>
   <button class="close" id="imgClose">닫기</button>
 </div>
 
@@ -560,7 +559,6 @@ function showImage(dataUrl, name){
   im.src=dataUrl; im.alt=name;
   im.style.cssText='width:100%;border-radius:14px;display:block';
   $('#imgBox').append(im);
-  const dl=$('#imgDl'); dl.href=dataUrl; dl.download=name;
   $('#dim').classList.add('on'); sh.classList.add('on');
 }
 function openSettings(){
@@ -766,10 +764,16 @@ function renderGung(m) {
   const ij=g.속궁합.일지;
   ci('일지', '<span class="han">'+R.J[m.A.saju.day.ji]+'</span> · <span class="han">'+
     R.J[m.B.saju.day.ji]+'</span> — '+(ij.작용.map(x=>x.관계).join(', ')||'특별한 작용 없음')+
-    '<br><span style="color:var(--faint);font-size:12px">배우자궁끼리의 관계라 체감이 가장 큽니다</span>',
+    '<br><span style="color:var(--faint);font-size:12px">'+
+      (['연애','부부'].includes(g.관계종류.종류)
+        ? '배우자궁끼리의 관계라 체감이 가장 큽니다'
+        : '가장 가까운 자리끼리의 관계라 체감이 가장 큽니다')+'</span>',
     [ij.v>0.2?'잘 맞음':ij.v<-0.2?'부딪힘':'보통', ij.v>0.2?'b1':ij.v<-0.2?'b4':'b3']);
   if(g.겉궁합) ci('띠', '<span class="han">'+R.J[m.A.saju.year.ji]+'</span> · <span class="han">'+
-    R.J[m.B.saju.year.ji]+'</span> — '+(g.겉궁합.작용||[]).map(x=>x.관계||x).join(', ')||'무관');
+    R.J[m.B.saju.year.ji]+'</span> — '+(g.겉궁합.관계||'특별한 작용 없음')+
+    (g.겉궁합.해설?'<br><span style="color:var(--faint);font-size:12px">'+g.겉궁합.해설+'</span>':''),
+    [g.겉궁합.v>0.2?'잘 맞음':g.겉궁합.v<-0.2?'부딪힘':'보통',
+     g.겉궁합.v>0.2?'b1':g.겉궁합.v<-0.2?'b4':'b3']);
   w.append(core);
 
   w.append(el('h2','','서로 주고받는 것'));
@@ -788,6 +792,32 @@ function renderGung(m) {
     L.append(li);
   });
   w.append(L);
+
+  if(g.십성관계){
+    w.append(el('h2','','서로에게 어떤 사람인가'));
+    const L4=el('div','list');
+    for(const [who,v] of [['나',g.십성관계.A기준],['상대',g.십성관계.B기준]]){
+      if(!v) continue;
+      const li=el('div','li');
+      li.append(el('span','k',who));
+      li.append(hintable(el('span','v',
+        (v.상대는나에게?'상대는 나에게 <b>'+v.상대는나에게+'</b><br>':'')+
+        '<span style="color:var(--mid)">'+(v.해설||'')+'</span>'),
+        '십성', v.상대는나에게||''));
+      L4.append(li);
+    }
+    if(L4.childNodes.length) w.append(L4);
+  }
+  if(g.인연리스크 && (g.인연리스크.항목||[]).length){
+    w.append(el('h2','','미리 알아둘 것'));
+    const L5=el('div','list');
+    (g.인연리스크.항목||[]).forEach(x=>{
+      const li=el('div','li');
+      li.append(el('span','v', typeof x==='string'?x:(x.내용||x.해설||'')));
+      L5.append(li);
+    });
+    w.append(L5);
+  }
 
   const mx=[...g.전체매트릭스.천간, ...g.전체매트릭스.지지];
   if(mx.length){

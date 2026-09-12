@@ -429,7 +429,7 @@ section{animation:in .3s cubic-bezier(.2,.7,.3,1) both}
       </div>
       <div class="row" style="margin-top:11px">
         <div class="field"><label>관계</label><select id="rel">
-          <option>연애</option><option>부부</option><option>동업</option><option>가족</option><option>친구</option></select></div>
+          <option>연애</option><option>부부</option><option>형제·자매</option><option>부모·자식</option><option>가족</option><option>친구</option><option>동업</option></select></div>
         <button class="go" id="runGung">맞춰보기</button>
       </div>
     </div>
@@ -458,6 +458,17 @@ section{animation:in .3s cubic-bezier(.2,.7,.3,1) both}
 </nav>
 <div class="toast" id="toast"></div>
 <div class="dim" id="dim"></div>
+<div class="sheet" id="imgSheet" role="dialog" aria-modal="true" aria-labelledby="imgTitle">
+  <div class="grip"></div>
+  <h3 id="imgTitle">그림으로 저장</h3>
+  <p class="shint" style="margin-bottom:12px">그림을 <b>길게 눌러</b> "이미지 저장"을 고르면 사진첩에 들어갑니다.
+    아래 버튼으로 내려받을 수도 있습니다.</p>
+  <div id="imgBox" style="max-height:52vh;overflow:auto;border-radius:14px;background:var(--sunk)"></div>
+  <a id="imgDl" class="go" style="width:100%;display:block;text-align:center;margin-top:12px;
+     text-decoration:none;line-height:1.4">내려받기</a>
+  <button class="close" id="imgClose">닫기</button>
+</div>
+
 <div class="sheet" id="setSheet" role="dialog" aria-modal="true" aria-labelledby="setTitle">
   <div class="grip"></div>
   <h3 id="setTitle">설정</h3>
@@ -525,7 +536,7 @@ function openSheet(kind, value){
   $('#sheetClose').focus();
 }
 function closeSheet(){ $('#dim').classList.remove('on'); $('#sheet').classList.remove('on');
-  $('#setSheet').classList.remove('on'); }
+  $('#setSheet').classList.remove('on'); $('#imgSheet').classList.remove('on'); }
 
 /* 설정 — 한 곳에서만 관리한다 */
 function drawModels(){
@@ -540,6 +551,17 @@ function drawModels(){
     b.onclick=()=>{ CFG.model=m.id; drawModels(); };
     box.append(b);
   });
+}
+/* 그림을 화면에 띄운다. 길게 누르면 폰 기본 메뉴로 저장할 수 있다. */
+function showImage(dataUrl, name){
+  const sh=$('#imgSheet');
+  $('#imgBox').innerHTML='';
+  const im=document.createElement('img');
+  im.src=dataUrl; im.alt=name;
+  im.style.cssText='width:100%;border-radius:14px;display:block';
+  $('#imgBox').append(im);
+  const dl=$('#imgDl'); dl.href=dataUrl; dl.download=name;
+  $('#dim').classList.add('on'); sh.classList.add('on');
 }
 function openSettings(){
   $('#setKey').value=CFG.key; $('#setWorker').value=CFG.worker;
@@ -1362,16 +1384,15 @@ $('#imgBtn').onclick=async()=>{
     if(!blob) throw new Error('이미지를 만들지 못했습니다');
     const name='사주_'+(TITLES[cur]||'')+'_'+new Date().toISOString().slice(0,10)+'.png';
     const file=new File([blob],name,{type:'image/png'});
-    // 폰에서는 공유가 자연스럽고, 안 되면 내려받는다
-    if(navigator.canShare && navigator.canShare({files:[file]})){
-      await navigator.share({files:[file], title:name});
-      toast('공유했어요');
-    }else{
-      const url=URL.createObjectURL(blob);
-      const a=document.createElement('a'); a.href=url; a.download=name; a.click();
-      setTimeout(()=>URL.revokeObjectURL(url),3000);
-      toast('이미지를 저장했어요');
-    }
+    // 앱 안의 브라우저는 파일 공유를 막는 경우가 많다. 되면 공유하고, 안 되면 그림을 띄운다.
+    let 공유됨=false;
+    try{
+      if(navigator.canShare && navigator.canShare({files:[file]})){
+        await navigator.share({files:[file], title:name});
+        공유됨=true; toast('공유창에서 고른 곳으로 보냈어요');
+      }
+    }catch(e){ if(e && e.name==='AbortError') return; }
+    if(!공유됨) showImage(canvas.toDataURL('image/png'), name);
   }catch(e){
     if(e && e.name==='AbortError'){ /* 사용자가 공유를 취소함 */ }
     else toast(String(e.message||e).slice(0,40));
@@ -1514,6 +1535,7 @@ $('#runGung').onclick=()=>{
 };
 $('#gearBtn').onclick=openSettings;
 $('#setClose').onclick=closeSheet;
+$('#imgClose').onclick=closeSheet;
 $('#setSave').onclick=()=>{
   CFG.key=$('#setKey').value.trim();
   CFG.worker=$('#setWorker').value.trim();

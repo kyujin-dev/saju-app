@@ -1,0 +1,7 @@
+{
+  "appId": "kr.saju.app",
+  "appName": "사주",
+  "webDir": "www",
+  "android": { "allowMixedContent": false },
+  "server": { "androidScheme": "https" }
+}

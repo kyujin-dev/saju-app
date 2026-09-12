@@ -1,0 +1,14 @@
+{
+  "name": "saju-app",
+  "version": "1.0.0",
+  "private": true,
+  "devDependencies": {
+    "@capacitor/cli": "^6.2.0",
+    "@capacitor/core": "^6.2.0",
+    "@capacitor/android": "^6.2.0"
+  },
+  "scripts": {
+    "sync": "npx cap sync android",
+    "open": "npx cap open android"
+  }
+}

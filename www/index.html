@@ -1414,7 +1414,23 @@ $('#imgBtn').onclick=async()=>{
     if(!blob) throw new Error('이미지를 만들지 못했습니다');
     const name='사주_'+(TITLES[cur]||'')+'_'+new Date().toISOString().slice(0,10)+'.png';
     const file=new File([blob],name,{type:'image/png'});
-    // 앱 안의 브라우저는 파일 공유를 막는 경우가 많다. 되면 공유하고, 안 되면 그림을 띄운다.
+    const dataUrl=canvas.toDataURL('image/png');
+    // 앱으로 설치했으면 폰의 파일·공유 기능을 직접 쓴다. 이게 가장 확실하다.
+    const P=(window.Capacitor && window.Capacitor.Plugins) || {};
+    if(P.Filesystem && P.Share){
+      try{
+        const base64=dataUrl.split(',')[1];
+        const w=await P.Filesystem.writeFile({
+          path:name, data:base64, directory:'CACHE', recursive:true });
+        await P.Share.share({ title:name, url:w.uri, dialogTitle:'그림 저장하기' });
+        toast('고른 곳으로 보냈어요');
+        return;
+      }catch(e){
+        if(e && /cancel/i.test(String(e.message||''))) return;
+        // 실패하면 아래 방식으로 넘어간다
+      }
+    }
+    // 앱 밖(브라우저)에서는 공유 API를 쓴다
     let 공유됨=false;
     try{
       if(navigator.canShare && navigator.canShare({files:[file]})){
@@ -1422,7 +1438,7 @@ $('#imgBtn').onclick=async()=>{
         공유됨=true; toast('공유창에서 고른 곳으로 보냈어요');
       }
     }catch(e){ if(e && e.name==='AbortError') return; }
-    if(!공유됨) showImage(canvas.toDataURL('image/png'), name);
+    if(!공유됨) showImage(dataUrl, name);
   }catch(e){
     if(e && e.name==='AbortError'){ /* 사용자가 공유를 취소함 */ }
     else toast(String(e.message||e).slice(0,40));

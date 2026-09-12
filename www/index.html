@@ -69,6 +69,9 @@ header h1{font-size:22px;font-weight:800;letter-spacing:-.035em;
 .field input,.field select{width:100%;background:var(--sunk);border:0;border-radius:14px;
   padding:11px 12px;font-size:15px;font-weight:600}
 .field input:focus,.field select:focus{background:#fff;box-shadow:0 0 0 2px var(--a1)}
+/* 안내 문구를 입력값으로 오해하지 않도록 충분히 흐리게 */
+.field input::placeholder,.sheet input::placeholder,.ask input::placeholder,
+.more input::placeholder,#qq::placeholder{color:#C3C3D4;font-weight:400;opacity:1}
 /* datalist를 붙이면 브라우저가 제멋대로 화살표를 그린다 — 지운다 */
 input[list]::-webkit-calendar-picker-indicator{display:none!important;opacity:0;width:0}
 input[list]::-webkit-list-button{display:none!important}
@@ -348,16 +351,16 @@ section{animation:in .3s cubic-bezier(.2,.7,.3,1) both}
     </div>
     <div id="byDate">
     <div class="row">
-      <div class="field"><label for="y">연</label><input id="y" type="number" value="1989" inputmode="numeric"></div>
-      <div class="field"><label for="m">월</label><input id="m" type="number" value="5" inputmode="numeric"></div>
-      <div class="field"><label for="d">일</label><input id="d" type="number" value="30" inputmode="numeric"></div>
-      <div class="field"><label for="hh">시</label><input id="hh" type="number" value="20" placeholder="모름" inputmode="numeric"></div>
-      <div class="field"><label for="mi">분</label><input id="mi" type="number" value="30" inputmode="numeric"></div>
+      <div class="field"><label for="y">연</label><input id="y" type="number" placeholder="YYYY" inputmode="numeric"></div>
+      <div class="field"><label for="m">월</label><input id="m" type="number" placeholder="MM" inputmode="numeric"></div>
+      <div class="field"><label for="d">일</label><input id="d" type="number" placeholder="DD" inputmode="numeric"></div>
+      <div class="field"><label for="hh">시</label><input id="hh" type="number" placeholder="모름" inputmode="numeric"></div>
+      <div class="field"><label for="mi">분</label><input id="mi" type="number" placeholder="분" inputmode="numeric"></div>
     </div>
     <div class="row">
       <div class="field"><label for="g">성별</label><select id="g"><option value="M">남</option><option value="F">여</option></select></div>
       <div class="field" style="flex:2"><label for="city">태어난 곳</label>
-        <input id="city" list="cities" value="대전" placeholder="도시 이름" autocomplete="off"></div>
+        <input id="city" list="cities" placeholder="도시" autocomplete="off"></div>
       <label class="chk"><input type="checkbox" id="lunar">음력</label>
       <label class="chk"><input type="checkbox" id="leap">윤달</label>
       <button class="go" id="run">보기</button>
@@ -365,10 +368,10 @@ section{animation:in .3s cubic-bezier(.2,.7,.3,1) both}
     </div>
     <div id="byPillar" hidden>
       <div class="row">
-        <div class="field"><label for="p1">연주</label><input id="p1" value="己巳" maxlength="2" autocomplete="off"></div>
-        <div class="field"><label for="p2">월주</label><input id="p2" value="己巳" maxlength="2" autocomplete="off"></div>
-        <div class="field"><label for="p3">일주</label><input id="p3" value="庚寅" maxlength="2" autocomplete="off"></div>
-        <div class="field"><label for="p4">시주</label><input id="p4" value="丙戌" maxlength="2" placeholder="모름" autocomplete="off"></div>
+        <div class="field"><label for="p1">연주</label><input id="p1" maxlength="2" placeholder="○○" autocomplete="off"></div>
+        <div class="field"><label for="p2">월주</label><input id="p2" maxlength="2" placeholder="○○" autocomplete="off"></div>
+        <div class="field"><label for="p3">일주</label><input id="p3" maxlength="2" placeholder="○○" autocomplete="off"></div>
+        <div class="field"><label for="p4">시주</label><input id="p4" maxlength="2" placeholder="모름" autocomplete="off"></div>
       </div>
       <div class="row">
         <div class="field"><label for="pg">성별</label><select id="pg"><option value="M">남</option><option value="F">여</option></select></div>
@@ -395,24 +398,24 @@ section{animation:in .3s cubic-bezier(.2,.7,.3,1) both}
       </div>
       <div id="bByDate">
       <div class="row">
-        <div class="field"><label>연</label><input id="by" type="number" value="1995" inputmode="numeric"></div>
-        <div class="field"><label>월</label><input id="bm" type="number" value="7" inputmode="numeric"></div>
-        <div class="field"><label>일</label><input id="bd" type="number" value="15" inputmode="numeric"></div>
-        <div class="field"><label>시</label><input id="bhh" type="number" value="14" inputmode="numeric"></div>
-        <div class="field"><label>분</label><input id="bmi" type="number" value="0" inputmode="numeric"></div>
+        <div class="field"><label>연</label><input id="by" type="number" placeholder="YYYY" inputmode="numeric"></div>
+        <div class="field"><label>월</label><input id="bm" type="number" placeholder="MM" inputmode="numeric"></div>
+        <div class="field"><label>일</label><input id="bd" type="number" placeholder="DD" inputmode="numeric"></div>
+        <div class="field"><label>시</label><input id="bhh" type="number" placeholder="모름" inputmode="numeric"></div>
+        <div class="field"><label>분</label><input id="bmi" type="number" placeholder="분" inputmode="numeric"></div>
       </div>
       <div class="row">
         <div class="field"><label>성별</label><select id="bg"><option value="F">여</option><option value="M">남</option></select></div>
         <div class="field" style="flex:2"><label>태어난 곳</label>
-          <input id="bcity" list="cities" value="키이우" placeholder="도시 이름" autocomplete="off"></div>
+          <input id="bcity" list="cities" placeholder="도시" autocomplete="off"></div>
         <label class="chk"><input type="checkbox" id="blunar">음력</label>
       </div>
       </div>
       <div id="bByPillar" hidden>
         <div class="row">
-          <div class="field"><label>연주</label><input id="q1" value="乙亥" maxlength="2" autocomplete="off"></div>
-          <div class="field"><label>월주</label><input id="q2" value="癸未" maxlength="2" autocomplete="off"></div>
-          <div class="field"><label>일주</label><input id="q3" value="丁未" maxlength="2" autocomplete="off"></div>
+          <div class="field"><label>연주</label><input id="q1" maxlength="2" placeholder="○○" autocomplete="off"></div>
+          <div class="field"><label>월주</label><input id="q2" maxlength="2" placeholder="○○" autocomplete="off"></div>
+          <div class="field"><label>일주</label><input id="q3" maxlength="2" placeholder="○○" autocomplete="off"></div>
           <div class="field"><label>시주</label><input id="q4" value="" maxlength="2" placeholder="모름" autocomplete="off"></div>
         </div>
         <div class="row">
@@ -555,6 +558,11 @@ function toast(t){ const e=$('#toast'); e.textContent=t; e.classList.add('on');
 
 function readForm(p) {
   const v = id => $('#'+(p||'')+id).value.trim();
+  const need = [['y','연도'],['m','월'],['d','일']].filter(([k]) => !v(k));
+  if (need.length) {
+    const e = new Error((p ? '상대의 ' : '') + need.map(x => x[1]).join('·') + '를 넣어주세요');
+    e.userMessage = e.message; throw e;
+  }
   const hh = v('hh');
   return { y:+v('y'), m:+v('m'), d:+v('d'),
     hh: hh===''?null:+hh, mi: v('mi')===''?0:+v('mi'), unknownHour: hh==='',
@@ -1399,7 +1407,7 @@ markGear();
     });
   }
 })();
-buildSpreads(); layFan(); $('#run').click();
+buildSpreads(); layFan();
 </script>
 </body>
 </html>

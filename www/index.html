@@ -48,7 +48,9 @@ header h1{font-size:22px;font-weight:800;letter-spacing:-.035em;
   padding:6px 13px;border-radius:999px;box-shadow:var(--sh);font-family:'Noto Serif KR',serif}
 .who:empty{display:none}
 .copy{margin-left:auto;background:var(--card);box-shadow:var(--sh);border-radius:999px;
-  padding:7px 15px;font-size:13px;font-weight:700;color:var(--a1)}
+  padding:7px 13px;font-size:13px;font-weight:700;color:var(--a1)}
+.copy+.copy{margin-left:6px}
+header{flex-wrap:wrap;row-gap:8px}
 .copy:active{transform:scale(.95)}
 .gear{background:var(--card);box-shadow:var(--sh);border-radius:999px;
   padding:7px 13px;font-size:13px;font-weight:700;color:var(--mid);margin-left:6px}
@@ -282,6 +284,7 @@ section{animation:in .3s cubic-bezier(.2,.7,.3,1) both}
 .fact.hint::after,.tag.hint::after,.plab .hint::after{content:'?';position:absolute;
   top:4px;right:6px;font-size:9px;font-weight:800;color:var(--faint);opacity:.5}
 .plab .hint{position:relative;padding-right:18px}
+.col .pos.hint{border-radius:999px;padding:2px 8px;margin:0 auto 6px;display:inline-block}
 .col .hint{border-radius:8px;transition:background .15s}
 .col .hint:hover{background:rgba(124,92,252,.08)}
 .fact.hint:active,.tag.hint:active{transform:scale(.97)}
@@ -339,6 +342,7 @@ section{animation:in .3s cubic-bezier(.2,.7,.3,1) both}
     <h1 id="pageTitle">사주</h1>
     <span class="who" id="who"></span>
     <button class="copy" id="copyBtn">복사</button>
+    <button class="copy" id="imgBtn">이미지</button>
     <button class="gear" id="gearBtn" aria-label="설정">설정</button>
   </header>
 
@@ -585,7 +589,8 @@ function renderSaju(r) {
   [['년',s.year],['월',s.month],['일',s.day],['시',s.hour]].filter(x=>x[1])
     .forEach(([pos,x],i) => {
       const c = el('div','col'+(i===2?' me':''));
-      c.append(el('div','pos', i===2?'나':pos));
+      // 자리 라벨을 누르면 그 기둥이 무엇을 뜻하는지 설명한다
+      c.append(hintable(el('div','pos', i===2?'나':pos), '자리', pos));
       if(i!==2) c.append(hintable(el('div','ss', R.sipseongOfGan(d,x.gan)),'십성',R.sipseongOfGan(d,x.gan)));
       else c.append(el('div','ss',''));
       c.append(el('div','glyph '+ganCls(x.gan), R.G[x.gan]));
@@ -1085,7 +1090,10 @@ function renderReport(res){
   }
   if(f.한계) w.append(el('div','lim', typeof f.한계==='string'?f.한계:JSON.stringify(f.한계)));
   const q=res&&res.품질;
-  const gi=(res&&res.검증&&(res.검증.코드가드||[]).concat(res.검증.최종가드||[]))||[];
+  // 사용자에게 보여줄 것은 내용의 문제뿐. 형식 복구 같은 내부 처리는 감춘다.
+  const 내부 = /JSON 형식|원문은 살림|형식 미준수/;
+  const gi=((res&&res.검증&&(res.검증.코드가드||[]).concat(res.검증.최종가드||[]))||[])
+    .filter(i=>!내부.test(i.유형||''));
   if(q){
     if(gi.length){
       const box=el('div','flag');
@@ -1309,6 +1317,67 @@ function txtTarot(){
   });
   return L.join('\n');
 }
+/* 화면을 그림으로 저장한다.
+   캡처 라이브러리는 쓸 때 한 번만 불러온다(평소엔 받지 않는다). */
+let _h2c=null;
+function loadCapture(){
+  if(_h2c) return _h2c;
+  _h2c=new Promise((res,rej)=>{
+    if(window.html2canvas) return res(window.html2canvas);
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+    s.onload=()=>res(window.html2canvas);
+    s.onerror=()=>rej(new Error('캡처 도구를 불러오지 못했습니다'));
+    document.head.append(s);
+  });
+  return _h2c;
+}
+$('#imgBtn').onclick=async()=>{
+  const btn=$('#imgBtn');
+  const sec=$('#tab-'+cur);
+  if(!sec || !sec.textContent.trim()){ toast('저장할 내용이 없어요'); return; }
+  btn.disabled=true; btn.textContent='만드는 중';
+  try{
+    const h2c=await loadCapture();
+    // 입력 폼과 안내 문구는 빼고, 결과만 담는다
+    const hide=[...sec.querySelectorAll('.form, .ask, .aibar')];
+    const prev=hide.map(e=>e.style.display);
+    hide.forEach(e=>e.style.display='none');
+    // 머리글을 붙여 무엇의 결과인지 남긴다
+    const cap=el('div');
+    cap.style.cssText='padding:16px 18px 4px;font-family:inherit';
+    cap.innerHTML='<div style="font-size:18px;font-weight:800;color:#14141F">'+
+      (TITLES[cur]||'사주')+'</div>'+
+      '<div style="font-size:13px;color:#6E6E85;margin-top:4px;font-family:\'Noto Serif KR\',serif">'+
+      ($('#who').textContent||'')+'</div>';
+    sec.prepend(cap);
+    const canvas=await h2c(sec,{
+      backgroundColor:'#F7F6FC', scale:Math.min(2,window.devicePixelRatio||1),
+      useCORS:true, allowTaint:false, logging:false,
+      windowWidth:document.documentElement.clientWidth });
+    cap.remove();
+    hide.forEach((e,i)=>e.style.display=prev[i]);
+
+    const blob=await new Promise(r=>canvas.toBlob(r,'image/png'));
+    if(!blob) throw new Error('이미지를 만들지 못했습니다');
+    const name='사주_'+(TITLES[cur]||'')+'_'+new Date().toISOString().slice(0,10)+'.png';
+    const file=new File([blob],name,{type:'image/png'});
+    // 폰에서는 공유가 자연스럽고, 안 되면 내려받는다
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file], title:name});
+      toast('공유했어요');
+    }else{
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download=name; a.click();
+      setTimeout(()=>URL.revokeObjectURL(url),3000);
+      toast('이미지를 저장했어요');
+    }
+  }catch(e){
+    if(e && e.name==='AbortError'){ /* 사용자가 공유를 취소함 */ }
+    else toast(String(e.message||e).slice(0,40));
+  }finally{ btn.disabled=false; btn.textContent='이미지'; }
+};
+
 $('#copyBtn').onclick=async()=>{
   let t='';
   const ask=txtAsk(cur)?'\n\n'+txtAsk(cur):'';

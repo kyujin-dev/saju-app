@@ -193,10 +193,19 @@ function gongmang(dayIdx) {
 /* 조사 — 받침에 따라 갈린다. 코드로 문자열을 이어붙이면 "수이 死", "편재은 잠겨"처럼
    틀린 조사가 그대로 나간다. 변수 뒤에 조사를 붙일 때는 반드시 이 함수를 쓴다.
    josa('수','이가') → '수가' / josa('금','이가') → '금이' */
+/* 간지 한자는 읽는 음에 받침이 있는 것과 없는 것이 섞여 있다.
+   甲(갑)·寅(인)·申(신)은 받침이 있고, 己(기)·巳(사)·午(오)는 없다.
+   코드로는 알 수 없으니 표로 둔다. */
+const HANJA_BATCHIM = {
+  甲:1, 乙:1, 丙:1, 丁:1, 戊:0, 己:0, 庚:1, 辛:1, 壬:1, 癸:0,
+  子:0, 丑:1, 寅:1, 卯:0, 辰:1, 巳:0, 午:0, 未:0, 申:1, 酉:0, 戌:1, 亥:0,
+};
 function josa(word, pair) {
   const w = String(word);
-  const c = w.charCodeAt(w.length - 1) - 0xAC00;
-  const has = c >= 0 && c < 11172 ? (c % 28) !== 0 : true;  // 한글이 아니면 받침 있는 쪽
+  const last = w[w.length - 1];
+  if (HANJA_BATCHIM[last] !== undefined) return w + (HANJA_BATCHIM[last] ? pair[0] : pair[1]);
+  const c = last.charCodeAt(0) - 0xAC00;
+  const has = c >= 0 && c < 11172 ? (c % 28) !== 0 : true;  // 판단 불가면 받침 있는 쪽
   return w + (has ? pair[0] : pair[1]);
 }
 
@@ -233,7 +242,7 @@ module.exports = {
   UNSEONG, sibiunseong, SINSAL12, sibisinsal, SAMHAP_GROUP,
   CHEONEUL, MUNCHANG, YANGIN, BAEKHO, GWAEGANG, GWIMUN, WONJIN, DOHWA, YEOKMA, HWAGAE, HONGYEOM, HYEONCHIM_G, HYEONCHIM_J, gongmang,
   HAN_G, NAN_G, JO_G, SEUP_G, HAN_J, NAN_J, JO_J, SEUP_J,
-  G_TEMP, J_TEMP, G_DRY, J_DRY, SEASON_TEMP, ageOf, ageKor, josa,
+  G_TEMP, J_TEMP, G_DRY, J_DRY, SEASON_TEMP, ageOf, ageKor, josa, HANJA_BATCHIM,
 };
 
 return module.exports; })();
@@ -1110,6 +1119,36 @@ function sinsal(saju, opts) {
   const gm = R.gongmang(saju.day.idx);
   jis.forEach((j,i) => { if (gm.includes(j) && i !== 2)
     found.push({ name:'공망', pos:pos[i], char:R.J[j], kind:'중립' }); });
+
+  /* 같은 사실이 여러 줄로 불어나는 것을 정리한다.
+     巳戌처럼 원진이면서 귀문인 쌍은 한 줄로 합치고,
+     년·월이 같은 글자라 같은 신살이 두 번 잡히면 자리를 묶는다. */
+  const merged = [];
+  const key = x => x.name + '|' + (x.char || '');
+  const posOf = x => Array.isArray(x.pos) ? x.pos.join('') : x.pos;
+  // (1) 원진 + 귀문이 같은 자리면 하나로
+  const wj = found.filter(x => x.name === '원진살');
+  for (const w of wj) {
+    const g = found.find(x => x.name === '귀문관살' && posOf(x) === posOf(w) && x.char === w.char);
+    if (g) { w.name = '원진·귀문'; g.__drop = true; }
+  }
+  // (2) 이름·글자가 같으면 자리를 합친다
+  const ORDER = { 년:0, 월:1, 일:2, 시:3 };
+  const sortPos = ps => [...new Set(ps)].sort((a, b) => (ORDER[a] ?? 9) - (ORDER[b] ?? 9));
+  for (const x of found) {
+    if (x.__drop) continue;
+    const hit = merged.find(m => key(m) === key(x));
+    if (hit) {
+      hit.pos = sortPos([...(Array.isArray(hit.pos) ? hit.pos : [hit.pos]),
+                         ...(Array.isArray(x.pos) ? x.pos : [x.pos])]);
+      hit.겹침 = true;
+    } else {
+      const c = { ...x };
+      if (Array.isArray(c.pos)) c.pos = sortPos(c.pos);
+      merged.push(c);
+    }
+  }
+  found.length = 0; found.push(...merged);
 
   return { base: R.J[base], baseType: o.sinsalBase === 'year' ? '연지 기준(고법)' : '일지 기준(현대)',
            gongmang: gm.map(x => R.J[x]).join(''), list: found };
@@ -2117,7 +2156,8 @@ function natal(ctx) {
   const 궁성일치 = 배우자성.includes(일지십성);
   const dohwa = (sinsal.list || []).filter(x => ['연살','도화'].includes(x.name)).length;
   const a = out['애정·결혼'];
-  if (궁성일치) { a.점수 += 0.4; a.메모.push('배우자궁에 배우자성이 앉았다 — 인연의 대상이 뚜렷하다'); }
+  if (궁성일치) { a.점수 = Math.round((a.점수 + 0.4) * 100) / 100;
+    a.메모.push('배우자궁에 배우자성이 앉았다 — 인연의 대상이 뚜렷하다'); }
   if (dohwa) a.메모.push(`도화(연살) ${dohwa}개 — 사람을 끄는 힘이 있고 이성 인연이 잦다`);
   a.등급 = bandBy(a.점수, '애정·결혼');
 
@@ -3114,7 +3154,7 @@ function fullReading(rawInput) {
   du.forEach((x, i) => { const sf = DM.yongsinSafety(ctx0, saju.daeun.list[i]);
     if (sf && sf.작용.length) { x.용신안위 = sf.종합 || sf.작용.map(e=>e.s).join(' / '); } });
 
-  return { 입력: { ...norm.달력, 양력: `${input.y}-${input.m}-${input.d}` +
+  return tidyNumbers({ 입력: { ...norm.달력, 양력: `${input.y}-${input.m}-${input.d}` +
              (input.unknownHour ? ' (시간 미상)' : ` ${String(input.hh).padStart(2,'0')}:${String(input.mi).padStart(2,'0')}`),
              음력표기: IN.lunarLabel(input.y, input.m, input.d),
              경고: norm.warnings, 안내: norm.notes,
@@ -3127,7 +3167,25 @@ function fullReading(rawInput) {
            시운, 격변화, 명궁, 태원, 자식부모, 현재대운: curIdx,
            gongmang, gender: input.gender, birthYear: input.y,
            birth: { y: input.y, m: input.m, d: input.d },
-           현재나이: nowAge, 세는나이: R.ageKor(input.y) };
+           현재나이: nowAge, 세는나이: R.ageKor(input.y) });
+}
+
+/** 결과에 실린 소수를 정리한다.
+    0.24000000000000002 같은 값이 화면과 AI 재료에 그대로 실리면 신뢰를 깎는다.
+    절기 시각처럼 큰 수는 건드리지 않는다. */
+function tidyNumbers(o, seen) {
+  seen = seen || new WeakSet();
+  if (o === null || typeof o !== 'object') return o;
+  if (seen.has(o)) return o;
+  seen.add(o);
+  for (const k of Object.keys(o)) {
+    const v = o[k];
+    if (typeof v === 'number') {
+      if (Number.isFinite(v) && !Number.isInteger(v) && Math.abs(v) < 1e4)
+        o[k] = Math.round(v * 1000) / 1000;
+    } else if (v && typeof v === 'object') tidyNumbers(v, seen);
+  }
+  return o;
 }
 
 /** 명식 8글자를 직접 받아 분석한다.
@@ -3208,8 +3266,8 @@ function matchFromPillars(A, B, opts = {}) {
   a.gongmang = R.gongmang(a.saju.day.idx).map(x => R.J[x]);
   b.gongmang = R.gongmang(b.saju.day.idx).map(x => R.J[x]);
   const res = C.compatibilityFull(a, b, opts);
-  return { A: a, B: b, 궁합: res,
-    안내: '명식만으로 본 결과입니다. 생년월일이 없어 함께 보는 해와 결혼 적기는 계산하지 않았습니다' };
+  return tidyNumbers({ A: a, B: b, 궁합: res,
+    안내: '명식만으로 본 결과입니다. 생년월일이 없어 함께 보는 해와 결혼 적기는 계산하지 않았습니다' });
 }
 
 /** 두 사람 궁합 */
@@ -3219,7 +3277,7 @@ function matchmaking(inputA, inputB, opts = {}) {
   const sync = C.unSync(a, b, opts.fromYear || new Date().getFullYear(), opts.years || 10);
   const 결혼적기 = { A: C.deep.marriageTiming(a, opts.fromYear || new Date().getFullYear(), opts.years2 || 15),
                      B: C.deep.marriageTiming(b, opts.fromYear || new Date().getFullYear(), opts.years2 || 15) };
-  return { A: a, B: b, 궁합: res, 운의동조: sync, 결혼적기 };
+  return tidyNumbers({ A: a, B: b, 궁합: res, 운의동조: sync, 결혼적기 });
 }
 
 module.exports = { fullReading, readingFromPillars, fromPillars, matchmaking, matchFromPillars, restrength, groupFromFinal };
@@ -3814,6 +3872,15 @@ ${agent.name} — ${agent.role}
 [지침]
 ${agent.prompt}
 
+[비교해서 말할 때]
+"다음 대운도 크게 나아지지 않는다", "유일하게 음수다" 같은 비교는 재료의 두 값을 실제로
+확인하고 쓰세요. 실측으로 현재 -0.2, 다음 0.4인데 "크게 나아지지 않는다"고 쓴 적이 있습니다.
+- 좋아지는지 나빠지는지는 숫자를 직접 비교해서 말하세요.
+- '유일하게', '가장', '모두'처럼 전체를 걸고 말할 때는 나머지 값을 다 확인하세요.
+- 영역 점수와 십성 세력은 다른 것입니다. 영역 점수는 -2~+2 범위이고 십성 세력은 백분율입니다.
+  "관성 점수 0.73"처럼 섞어 쓰면 읽는 사람이 오해합니다. 영역을 말할 때는 "직업·명예 점수"처럼
+  영역 이름을 그대로 쓰세요.
+
 [재료 읽는 법 — 숫자와 약어의 뜻]
 - 세력·비율은 모두 백분율입니다. 다섯 오행 또는 다섯 십성의 합이 100이 됩니다.
 - 평가 '점수'는 -2(가장 나쁨) ~ +2(가장 좋음) 범위이고 0이 중립입니다.
@@ -3969,8 +4036,8 @@ function checkHallucination(text, facts) {
 function guard(agentId, obj, facts, nums, keyed) {
   const issues = [];
   const text = obj && obj.__text ? obj.__text : JSON.stringify(obj);
-  if (obj && obj.__unparsed)
-    issues.push({ 대상: agentId, 유형: 'JSON 형식 미준수(원문은 살림)', 문장: '', 출처: '코드 가드' });
+  // 형식이 어긋난 응답을 파서가 되살린 것은 내부 처리일 뿐이다.
+  // 사용자에게는 내용의 문제만 보여준다(실측: 결과가 멀쩡한데 경고가 떠서 혼란스러웠다).
   for (const b of BANNED) {
     const m = text.match(b.re);
     if (m) issues.push({ 대상: agentId, 유형: b.why, 문장: m[0], 출처: '코드 가드' });
@@ -4516,6 +4583,8 @@ var module = { exports: {} }; var exports = module.exports;
    근거: 정해 만세력 사주강의 11·15·16·18·19강, 자평진전 성패론
    ============================================================= */
 
+const R = require('./saju-rules');
+
 const T_LEVEL = {
   '태강':'일간이 지나치게 강합니다. 힘은 넘치는데 쓸 데가 마땅치 않으면 헛돌기 쉬워, 그 기운을 빼줄 자리(일·재물·사람)를 만드는 게 관건입니다.',
   '신강':'일간이 넉넉한 편입니다. 책임과 일을 감당할 힘이 있으니, 주는 쪽·맡는 쪽에 서는 게 맞습니다.',
@@ -4631,6 +4700,7 @@ const SINSAL = {
   재관쌍미:'일지 안에 재물(재성)과 자리(관성)가 함께 든 일주입니다. 壬午·癸巳가 대표적이고, 둘을 한 자리에서 쥐는 형태라 신강하면 크게 쓰이고 신약하면 버겁습니다.',
   현침살:'글자 모양이 바늘처럼 뾰족한 甲·辛·卯·午·申이 여럿 모인 것입니다. 신경이 예민하고 감각이 날카로워, 칼·바늘·펜을 쓰는 일(의료·기술·글)과 인연이 깊다고 봅니다. 대신 잔걱정과 불면이 따르기 쉽습니다.',
   홍염살:'스스로 타오르는 매력입니다. 도화가 남을 끌어당긴다면 홍염은 내가 먼저 다가가는 쪽이라, 예술·연예처럼 자신을 드러내는 일과 인연이 깊습니다.',
+  '원진·귀문':'같은 두 글자가 원진이면서 귀문인 자리입니다. 만나면 부딪히는데 떨어지면 그리워지는 애증(원진)에, 남다른 직관과 예민함(귀문)이 겹칩니다. 둘이 함께 있으면 감정의 진폭이 특히 커집니다.',
   원진살:'만나면 부딪히는데 떨어지면 그리워지는 관계입니다. 애증이 반복됩니다.',
   공망:'비어 있다는 뜻입니다. 그 자리의 일은 손에 잘 잡히지 않지만, 욕심을 내려놓으면 오히려 편해진다고 봅니다.',
 };
@@ -4677,6 +4747,25 @@ const UNSEONG_T = {
 const TERMS = { T_LEVEL, T_ROOT, T_GYEOK, T_GYEOK_ALT, T_JONG, PATTERN_T, T_SUCCESS,
                 T_YONGSIN, T_BAND, T_JOHU, SINSAL, OHAENG, SIPSEONG_T, UNSEONG_T };
 
+/* 네 기둥이 각각 무엇을 뜻하는지. 신살이 어느 자리에 붙었는지 설명할 때 쓴다.
+   "년·월"이라고만 하면 처음 보는 사람은 그게 무엇을 가리키는지 알 수 없다.
+   신살은 아래 글자(지지)에만 붙으므로 지지 기준으로 풀어 쓴다. */
+const 자리뜻 = {
+  년: { 이름:'연주', 짧게:'집안·어린 시절', 뜻:'태어난 해의 자리입니다. 조상과 집안, 자라난 환경과 어린 시절을 봅니다' },
+  월: { 이름:'월주', 짧게:'사회생활·직업', 뜻:'태어난 달의 자리입니다. 부모·형제와 사회생활, 직업을 보는 가장 중요한 기둥입니다' },
+  일: { 이름:'일주', 짧게:'나와 배우자', 뜻:'태어난 날의 자리입니다. 윗글자가 나 자신이고 아랫글자가 배우자 자리라, 사주의 중심이 됩니다' },
+  시: { 이름:'시주', 짧게:'자식·말년', 뜻:'태어난 시각의 자리입니다. 자식과 말년, 내가 남기는 것을 봅니다' },
+  전체: { 이름:'사주 전체', 짧게:'여덟 글자 전반', 뜻:'특정 자리가 아니라 여덟 글자 전반에 걸쳐 나타납니다' },
+};
+function 자리설명(pos) {
+  const list = Array.isArray(pos) ? pos : [pos];
+  const ks = list.filter(p => 자리뜻[p]);
+  if (!ks.length) return '';
+  if (ks.length === 1) return `${자리뜻[ks[0]].이름} 자리입니다. ${자리뜻[ks[0]].뜻}.`;
+  return ks.map(k => `${자리뜻[k].이름}(${자리뜻[k].짧게})`).join(', ') + ' 세 자리에 걸쳐 있습니다.'
+    .replace('세 자리', ks.length === 2 ? '두 자리' : '세 자리');
+}
+
 /** 화면 항목 → { 제목, 뭐냐, 내경우 } */
 function explain(kind, value, r) {
   const S = r && r.strength, Y = r && r.yongsin;
@@ -4711,15 +4800,44 @@ function explain(kind, value, r) {
     case '조후': return { 제목:'조후 — ' + value,
       뭐냐:'사주의 기후입니다. 너무 덥거나 추우면 중화시켜줄 기운이 귀해집니다.',
       내경우: (T_JOHU[value]||'') + (Y ? ' ' + Y.johu.evidence : '') };
-    case '신살': return { 제목: value,
-      뭐냐:'신살은 특정 글자 배치에 붙은 이름입니다. 옛날에는 무섭게 봤지만 지금은 기운의 방향 정도로 참고합니다.',
-      내경우: SINSAL[value] || '이 신살에 대한 설명은 아직 정리되지 않았습니다.' };
+    case '신살': {
+      const hit = r && r.base && r.base.sinsal
+        ? (r.base.sinsal.list || []).find(x => x.name === value) : null;
+      let 위치 = '';
+      if (value === '공망' && r && r.base && r.base.sinsal) {
+        위치 = `이 사주의 공망은 ${r.base.sinsal.gongmang} 두 글자입니다. ` +
+               `원국에 그 글자가 있으면 그 자리의 일이 손에 잘 안 잡힌다고 봅니다.`;
+      } else if (hit) {
+        const ps = Array.isArray(hit.pos) ? hit.pos : [hit.pos];
+        const 이름들 = ps.filter(p => 자리뜻[p]).map(p => `${자리뜻[p].이름}(${자리뜻[p].짧게})`);
+        위치 = hit.char ? `${hit.char} 글자에 붙어 있습니다. ` : '';
+        if (이름들.length === 1) 위치 += `${이름들[0]} 자리입니다.`;
+        else if (이름들.length > 1) 위치 += `${이름들.join(', ')} 자리에 걸쳐 있습니다.`;
+      }
+      return { 제목: value,
+        뭐냐:'신살은 사주의 특정 글자 배치에 옛사람들이 붙여둔 이름입니다. ' +
+             '네 기둥(연주·월주·일주·시주) 가운데 어느 자리에 붙었는지에 따라 ' +
+             '삶의 어느 영역에서 나타나는지가 달라집니다. ' +
+             '옛날에는 길흉을 크게 봤지만 지금은 기운의 방향 정도로 참고합니다.',
+        내경우: (위치 ? 위치 + ' ' : '') +
+                (SINSAL[value] || '이 신살에 대한 설명은 아직 정리되지 않았습니다.') };
+    }
     case '오행': return { 제목:'오행 — ' + value,
       뭐냐:'목화토금수 다섯 기운이 서로 낳고(相生) 누르며(相剋) 도는 구조입니다. ' +
            '한쪽이 비거나 넘치면 그 계통이 약점이 되고, 운에서 채워지거나 더 몰릴 때 변화가 큽니다.',
       내경우: (OHAENG[value] || '') +
         (r && r.deep ? (() => { const t2 = r.deep.table.find(x => x.오행 === value);
           return t2 ? ` 이 사주에서는 ${t2.최종}%이며 월령에서 ${t2.월령} 상태입니다.` : ''; })() : '') };
+    case '자리': {
+      const v = 자리뜻[value] || 자리뜻.전체;
+      return { 제목: v.이름,
+        뭐냐:'사주는 태어난 해·달·날·시각을 각각 두 글자씩, 모두 여덟 글자로 세웁니다. ' +
+             '그 네 묶음을 네 기둥(사주四柱)이라 부르고, 기둥마다 삶의 다른 영역을 봅니다.',
+        내경우: v.뜻 + '.' + (r && r.base && r.base.chart ? (() => {
+          const c = r.base.chart.find(x => x.pos === value);
+          return c ? ` 이 사주에서는 ${c.간}${c.지}입니다. 아랫글자 ${c.지}, 십성으로는 ${c.지십성}입니다.` : '';
+        })() : '') };
+    }
     case '십성': {
       const grp = { 비견:'비겁', 겁재:'비겁', 식신:'식상', 상관:'식상',
                     편재:'재성', 정재:'재성', 편관:'관성', 정관:'관성',
@@ -4741,7 +4859,7 @@ function explain(kind, value, r) {
   }
 }
 
-if (typeof module !== 'undefined') module.exports = { TERMS, explain, SINSAL, OHAENG, PATTERN_T, T_JONG, T_GYEOK_ALT };
+if (typeof module !== 'undefined') module.exports = { TERMS, explain, SINSAL, OHAENG, PATTERN_T, T_JONG, T_GYEOK_ALT, 자리뜻, 자리설명 };
 
 return module.exports; })();
 

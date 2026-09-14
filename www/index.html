@@ -208,6 +208,14 @@ section{animation:in .3s cubic-bezier(.2,.7,.3,1) both}
 .empty{color:var(--faint);font-size:14px;padding:44px 0;text-align:center;font-weight:600}
 .err{background:linear-gradient(120deg,#FFE9ED,#FFE0E5);color:#C8283C;border-radius:14px;
   padding:12px 15px;font-size:13.5px;font-weight:600;margin-top:11px}
+.scopebar{display:flex;gap:7px;overflow-x:auto;padding:2px 0 4px;margin-top:12px;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none}
+.scopebar::-webkit-scrollbar{display:none}
+.scopebar button{flex:0 0 auto;background:var(--card);box-shadow:var(--sh);border-radius:999px;
+  padding:9px 16px;font-size:13.5px;font-weight:700;color:var(--mid);white-space:nowrap}
+.scopebar button.on{background:linear-gradient(100deg,var(--a1),var(--a2));color:#fff;box-shadow:none}
+.scopebar button:active{transform:scale(.96)}
+.scopehead{font-size:12px;font-weight:800;color:var(--a1);margin:16px 0 8px;padding:0 4px}
 .ask{background:var(--card);border-radius:var(--r);padding:14px 15px;margin-top:10px;
   box-shadow:var(--sh)}
 .ask .lb{font-size:12px;font-weight:800;color:var(--a1);margin-bottom:9px}
@@ -334,6 +342,46 @@ section{animation:in .3s cubic-bezier(.2,.7,.3,1) both}
   padding:11px 20px;border-radius:999px;font-size:13.5px;font-weight:700;
   opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;z-index:40}
 .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* 그림으로 저장할 때만 쓰는 큰 글씨.
+   화면은 그대로 두고 캡처 순간에만 키운다. */
+.capbig .report p,.capbig .sec p{font-size:20px!important;line-height:2!important}
+.capbig .report .rt{font-size:26px!important;line-height:1.5!important}
+.capbig .report .rs{font-size:19px!important;line-height:1.9!important}
+.capbig .report h3{font-size:17px!important}
+.capbig .report .ai1{font-size:19px!important}
+.capbig .report .ai2{font-size:17px!important;line-height:1.8!important}
+.capbig .report .lim,.capbig .report .flag .fi{font-size:16px!important;line-height:1.8!important}
+.capbig .fact dt{font-size:15px!important}
+.capbig .fact dd{font-size:24px!important}
+.capbig .li .k{font-size:17px!important}
+.capbig .li .v{font-size:18px!important;line-height:1.8!important}
+.capbig .panel p,.capbig .note{font-size:17px!important;line-height:1.9!important}
+.capbig h2{font-size:16px!important}
+.capbig .tag{font-size:16px!important;padding:8px 14px!important}
+.capbig .col .gz{font-size:44px!important}
+.capbig .col .pos,.capbig .col .ss{font-size:15px!important}
+.capbig .col .jj{font-size:14px!important}
+.capbig .scopehead{font-size:16px!important}
+
+.capxl .report p,.capxl .sec p{font-size:25px!important;line-height:2!important}
+.capxl .report .rt{font-size:32px!important;line-height:1.5!important}
+.capxl .report .rs{font-size:23px!important;line-height:1.9!important}
+.capxl .report h3{font-size:21px!important}
+.capxl .report .ai1{font-size:23px!important}
+.capxl .report .ai2{font-size:21px!important;line-height:1.8!important}
+.capxl .report .lim,.capxl .report .flag .fi{font-size:19px!important;line-height:1.8!important}
+.capxl .fact dt{font-size:18px!important}
+.capxl .fact dd{font-size:29px!important}
+.capxl .li .k{font-size:21px!important}
+.capxl .li .v{font-size:22px!important;line-height:1.8!important}
+.capxl .panel p,.capxl .note{font-size:21px!important;line-height:1.9!important}
+.capxl h2{font-size:19px!important}
+.capxl .tag{font-size:19px!important;padding:10px 16px!important}
+.capxl .col .gz{font-size:52px!important}
+.capxl .col .pos,.capxl .col .ss{font-size:18px!important}
+.capxl .col .jj{font-size:16px!important}
+.capxl .scopehead{font-size:19px!important}
 </style>
 </head>
 <body>
@@ -390,6 +438,8 @@ section{animation:in .3s cubic-bezier(.2,.7,.3,1) both}
 
   <section id="tab-saju">
     <div id="saju"><p class="empty">생년월일시를 넣고 보기를 누르세요</p></div>
+    <div class="scopebar" id="scopeBar"></div>
+    <div id="scopeOut"></div>
   </section>
   <section id="tab-unse" hidden><div id="unse"></div></section>
   <section id="tab-gung" hidden>
@@ -490,6 +540,12 @@ section{animation:in .3s cubic-bezier(.2,.7,.3,1) both}
   </div>
 
   <div class="sgroup">
+    <div class="slb">그림으로 저장할 때 글자 크기</div>
+    <div class="models" id="capSizeList"></div>
+    <p class="shint">화면은 그대로고, 그림으로 만들 때만 커집니다.</p>
+  </div>
+
+  <div class="sgroup">
     <div class="slb">Worker 주소 <span class="sopt">선택</span></div>
     <input id="setWorker" placeholder="https://..." autocomplete="off">
     <p class="shint">넣으면 API 키 대신 이쪽으로 요청합니다. 파일을 직접 열었을 때 호출이 막히면 이 방법을 쓰세요.</p>
@@ -538,6 +594,18 @@ function closeSheet(){ $('#dim').classList.remove('on'); $('#sheet').classList.r
   $('#setSheet').classList.remove('on'); $('#imgSheet').classList.remove('on'); }
 
 /* 설정 — 한 곳에서만 관리한다 */
+function drawCapSizes(){
+  const box=$('#capSizeList'); if(!box) return;
+  box.innerHTML='';
+  CAP_SIZES.forEach(s=>{
+    const b=el('button','mdl');
+    b.setAttribute('aria-pressed', String(s.id===CFG.capSize));
+    b.innerHTML='<span><span class="mn">'+s.이름+'</span><div class="md">'+s.설명+'</div></span>'+
+      '<span class="mt">'+s.특징+'</span>';
+    b.onclick=()=>{ CFG.capSize=s.id; drawCapSizes(); };
+    box.append(b);
+  });
+}
 function drawModels(){
   const box=$('#modelList'); box.innerHTML='';
   const cur=(MODELS.find(x=>x.id===CFG.model)||{}).이름||CFG.model;
@@ -564,7 +632,7 @@ function showImage(dataUrl, name){
 function openSettings(){
   $('#setKey').value=CFG.key; $('#setWorker').value=CFG.worker;
   $('#setCheap').checked=CFG.cheap;
-  drawModels();
+  drawModels(); drawCapSizes();
   $('#dim').classList.add('on'); $('#setSheet').classList.add('on');
   setTimeout(()=>$('#setKey').focus(),250);
 }
@@ -997,10 +1065,17 @@ const CFG = {
   set cheap(v){ try{ localStorage.setItem('cheap',v?'1':'0'); }catch(e){} },
   get model(){ try{ return localStorage.getItem('model')||'claude-sonnet-5'; }catch(e){ return window.__md||'claude-sonnet-5'; } },
   set model(v){ try{ localStorage.setItem('model',v); }catch(e){ window.__md=v; } },
+  get capSize(){ try{ return localStorage.getItem('capSize')||'lg'; }catch(e){ return window.__cs||'lg'; } },
+  set capSize(v){ try{ localStorage.setItem('capSize',v); }catch(e){ window.__cs=v; } },
   get ready(){ return !!(this.key||this.worker); },
 };
 
 /* 고를 수 있는 모델. 위로 갈수록 빠르고 아래로 갈수록 정밀합니다. */
+const CAP_SIZES = [
+  { id:'', 이름:'화면 그대로', 설명:'보이는 크기 그대로 담습니다', 특징:'보통' },
+  { id:'lg', 이름:'크게', 설명:'한 단계 키웁니다', 특징:'권장' },
+  { id:'xl', 이름:'아주 크게', 설명:'멀리서도 읽히게 키웁니다', 특징:'어르신용' },
+];
 const MODELS = [
   { id:'claude-haiku-4-5-20251001', 이름:'Haiku 4.5', 설명:'가장 빠르고 저렴', 특징:'빠름' },
   { id:'claude-sonnet-5',           이름:'Sonnet 5',  설명:'속도와 품질의 균형', 특징:'기본' },
@@ -1179,6 +1254,53 @@ const ASK_EX = {
   unse:['언제 이직하면 좋을까','올해 조심할 시기는','앞으로 3년 흐름은','지금이 투자할 때일까'],
   gung:['결혼해도 될까','무엇 때문에 자주 부딪힐까','어떻게 맞춰가면 좋을까','같이 일해도 될까'],
 };
+/* 보고 싶은 기간을 골라 그 기간만 읽는다. 범위마다 보는 재료가 다르다. */
+const SCOPES = [
+  { id:'이번달', 이름:'이번 달', 설명:'이 달의 흐름만' },
+  { id:'올해',   이름:'올해',   설명:'한 해의 큰 줄기' },
+  { id:'대운',   이름:'지금 10년', 설명:'지나는 국면' },
+  { id:'평생',   이름:'평생',   설명:'타고난 구조 전체' },
+];
+let lastScope={};
+function buildScopeBar(){
+  const bar=$('#scopeBar'); if(!bar) return;
+  bar.innerHTML='';
+  SCOPES.forEach(s=>{
+    const b=el('button','',s.이름);
+    b.onclick=()=>runScope(s);
+    bar.append(b);
+  });
+}
+async function runScope(s){
+  if(!lastR){ toast('먼저 사주를 펼쳐주세요'); return; }
+  if(!CFG.ready){ openSettings(); toast('먼저 API 키를 넣어주세요'); return; }
+  document.querySelectorAll('#scopeBar button').forEach((b,i)=>
+    b.classList.toggle('on', SCOPES[i].id===s.id));
+  const host=$('#scopeOut'); host.innerHTML='';
+  host.append(el('div','scopehead', s.이름+' — '+s.설명));
+  const out=el('div'); host.append(out);
+  out.scrollIntoView({behavior:'smooth',block:'nearest'});
+  const pg=progressBox(out);
+  const mn=m=>(MODELS.find(x=>x.id===m)||{}).이름||m;
+  pg.note('모델: '+mn(CFG.model));
+  try{
+    const call=makeCaller(
+      (a,f,t)=>pg.swap(AGENT_NAMES[a]||a,f,t),
+      (a,n,w)=>pg.retry(AGENT_NAMES[a]||a,n,w));
+    const res=await S.orch.runScope(s.id, lastR, call, { onProgress:e=>{
+      if(e.type==='wave-start') pg.start(e.agents);
+      if(e.type==='agent-done') pg.done(e.name, e.ok, e.사유);
+    }});
+    out.innerHTML=''; out.append(renderReport(res));
+    lastScope[s.id]=res;
+  }catch(e){
+    out.innerHTML='';
+    const msg=String(e.message||e);
+    out.append(el('div','err', msg + (/Failed to fetch|NetworkError|CORS/i.test(msg)
+      ? '<br><br>파일을 직접 열면 브라우저가 외부 호출을 막습니다. 설정에서 Worker 주소를 넣거나 간단한 서버로 열어보세요.' : '')));
+  }
+}
+
 function askPanel(kind, host){
   if(!host) return;
   const box=el('div','ask');
@@ -1333,6 +1455,18 @@ function aiPanel(kind){
   };
 }
 
+function txtScope(){
+  const ks=Object.keys(lastScope); if(!ks.length) return '';
+  const L=[];
+  for(const k of ks){
+    const f=lastScope[k].결과; if(!f) continue;
+    L.push('', '## '+(f.제목||k));
+    if(f.한줄요약) L.push(f.한줄요약);
+    (f.본문||[]).forEach(s=>L.push('### '+s.섹션, s.내용));
+    (f.실행요약||[]).forEach(x=>L.push('- '+x.제안+' — '+(x.이유||'')));
+  }
+  return L.join('\n');
+}
 function txtAsk(kind){
   const hist=askHistory[kind]||[];
   if(!hist.length) return '';
@@ -1392,15 +1526,18 @@ $('#imgBtn').onclick=async()=>{
   try{
     const h2c=await loadCapture();
     // 입력 폼과 안내 문구는 빼고, 결과만 담는다
-    const hide=[...sec.querySelectorAll('.form, .ask, .aibar')];
+    const hide=[...sec.querySelectorAll('.form, .ask, .aibar, .scopebar')];
     const prev=hide.map(e=>e.style.display);
     hide.forEach(e=>e.style.display='none');
+    const bigCls = CFG.capSize ? 'cap'+CFG.capSize : '';
+    if(bigCls) sec.classList.add(bigCls);
     // 머리글을 붙여 무엇의 결과인지 남긴다
     const cap=el('div');
     cap.style.cssText='padding:16px 18px 4px;font-family:inherit';
-    cap.innerHTML='<div style="font-size:18px;font-weight:800;color:#14141F">'+
+    const capTs = CFG.capSize==='xl' ? [30,20] : CFG.capSize==='lg' ? [24,16] : [18,13];
+    cap.innerHTML='<div style="font-size:'+capTs[0]+'px;font-weight:800;color:#14141F">'+
       (TITLES[cur]||'사주')+'</div>'+
-      '<div style="font-size:13px;color:#6E6E85;margin-top:4px;font-family:\'Noto Serif KR\',serif">'+
+      '<div style="font-size:'+capTs[1]+'px;color:#6E6E85;margin-top:4px;font-family:\'Noto Serif KR\',serif">'+
       ($('#who').textContent||'')+'</div>';
     sec.prepend(cap);
     const canvas=await h2c(sec,{
@@ -1408,6 +1545,7 @@ $('#imgBtn').onclick=async()=>{
       useCORS:true, allowTaint:false, logging:false,
       windowWidth:document.documentElement.clientWidth });
     cap.remove();
+    if(bigCls) sec.classList.remove(bigCls);
     hide.forEach((e,i)=>e.style.display=prev[i]);
 
     const blob=await new Promise(r=>canvas.toBlob(r,'image/png'));
@@ -1448,7 +1586,7 @@ $('#imgBtn').onclick=async()=>{
 $('#copyBtn').onclick=async()=>{
   let t='';
   const ask=txtAsk(cur)?'\n\n'+txtAsk(cur):'';
-  if(cur==='saju') t=(lastR?txtSaju(lastR):'')+(txtReport('saju')?'\n\n'+txtReport('saju'):'')+ask;
+  if(cur==='saju') t=(lastR?txtSaju(lastR):'')+(txtReport('saju')?'\n\n'+txtReport('saju'):'')+txtScope()+ask;
   else if(cur==='unse') t=(lastR?txtUnse(lastR):'')+(txtReport('unse')?'\n\n'+txtReport('unse'):'')+ask;
   else if(cur==='gung') t=(lastM?txtGung(lastM):'')+(txtReport('gung')?'\n\n'+txtReport('gung'):'')+ask;
   else t=txtTarot()+(txtReport('tarot')?'\n\n'+txtReport('tarot'):'');
@@ -1493,6 +1631,8 @@ function paint(r){
     .map(p=>R.G[p.gan]+R.J[p.ji]).join(' ');
   lastReport.saju=null; lastReport.unse=null;
   askHistory.saju=[]; askHistory.unse=[];
+  lastScope={}; $('#scopeOut').innerHTML='';
+  document.querySelectorAll('#scopeBar button').forEach(b=>b.classList.remove('on'));
   aiPanel('saju'); aiPanel('unse');
   show('saju');
 }
@@ -1568,6 +1708,8 @@ $('#runGung').onclick=()=>{
         .map(p=>R.G[p.gan]+R.J[p.ji]).join(' ');
       lastReport.saju=null; lastReport.unse=null;
   askHistory.saju=[]; askHistory.unse=[];
+  lastScope={}; $('#scopeOut').innerHTML='';
+  document.querySelectorAll('#scopeBar button').forEach(b=>b.classList.remove('on'));
   aiPanel('saju'); aiPanel('unse');
     }catch(_){}
     const m=S.full.matchmaking(readForm(),readForm('b'),

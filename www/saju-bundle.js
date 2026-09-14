@@ -3777,6 +3777,32 @@ A가 이 관계에서 겪을 일만 씁니다.
     pick: (r, m) => m,
   },
 
+  /* ===== 범위별 풀이 (올해·이번달·대운·평생) ===== */
+  {
+    id: 'beomwi', name: '범위 풀이', wave: 1, mode: 'scope',
+    role: '요청한 기간만 골라 읽는다.',
+    prompt: `당신은 명리 상담가입니다. 사용자가 고른 기간에 대해서만 씁니다.
+
+[기간에 맞게 쓰세요]
+재료의 '범위'에 어느 기간인지 적혀 있습니다. 그 기간의 이야기만 하세요.
+- 평생: 타고난 구조가 어떤 사람인지, 삶 전체에서 무엇이 강점이고 약점인지를 씁니다.
+  특정 연도를 길게 다루지 마세요.
+- 대운(10년): 지금 지나는 10년이 어떤 국면인지 씁니다. 이 구간에 무엇을 쌓고
+  무엇을 조심할지, 다음 구간으로 넘어갈 때 무엇이 달라지는지를 봅니다.
+- 올해: 그 해의 흐름만 봅니다. 원국 설명을 길게 늘어놓지 말고
+  올해 간지가 타고난 여덟 글자와 어떻게 만나는지를 중심으로 쓰세요.
+- 이번 달: 그 달만 봅니다. 달 안에서 앞뒤가 어떻게 다른지까지 짚어주면 좋습니다.
+- 기간이 짧을수록 구체적으로, 길수록 큰 틀로 씁니다.
+
+[분량] 한글 900자 이내(공통 지시보다 우선). 서론 없이 바로 들어가세요.
+
+출력: { "제목": string, "한줄요약": string,
+       "본문": [{"섹션":string,"내용":string}],
+       "지금할것": [{"제안":string,"이유":string,"시기":string}],
+       "한계": string }`,
+    pick: (r, m) => m,
+  },
+
   /* ===== 상담 (질문에 답하는 단일 에이전트) ===== */
   {
     id: 'sangdam', name: '상담가', wave: 1, mode: 'consult',
@@ -4545,7 +4571,7 @@ function checkHeadline(obj, agentId) {
 const 비현실 = [
   [/개명|이름을?\s*(바꾸|고치)|작명/, '개명 권유'],
   [/부적|굿을?\s*하|제사를?\s*지내|기도원|점집/, '주술적 해결책'],
-  [/이사를?\s*(하|가)|방위를?\s*(맞|보)|집을?\s*옮/, '이사·방위 권유'],
+  [/이사(?!회)|방위를?\s*(맞|보)|집을?\s*옮|이주하/, '이사·방위 권유'],
   [/퇴사하|직장을?\s*그만|회사를?\s*나오/, '퇴사 권유'],
   [/이혼하|헤어지|관계를?\s*끊|손절/, '관계 단절 권유'],
   [/투자하|주식을?\s*사|대출을?\s*받|코인/, '금융 결정 권유'],
@@ -4602,6 +4628,71 @@ function checkPastDates(text, agentId) {
         문장: m[0] + ' (오늘은 ' + M + '월)', 출처: '코드 가드' });
   }
   return out;
+}
+
+/* ---------- 범위별 풀이 ----------
+   보고 싶은 기간만 골라 읽는다. 기간이 다르면 봐야 할 재료도 다르다. */
+function scopePacket(kind, r) {
+  const base = { 날짜: todayInfo(), 명식: r.base.chart,
+    강약: { 판정: r.strength.level, 인비비율: r.strength.allyPct },
+    격국: { 이름: r.격국.name, 별칭: r.격국.별칭, 성패: r.성패.판정 },
+    용신: r.yongsin.primary, 오행: r.deep.table, 십성세력: r.groupPower,
+    현재나이: r.현재나이 };
+  const idx = r.현재대운 ?? 0;
+  if (kind === '평생')
+    return { ...base, 범위: '평생 — 타고난 구조 전체', 통근: r.통근.일간,
+      조후: r.yongsin.johu, 그릇: r.격국고저, 일주론: r.일주론, 조합: r.패턴,
+      신살: r.base.sinsal, 관계: r.base.relations, 궁성: r.궁성, 묘고: r.묘고,
+      자식부모: r.자식부모, 영역: r.영역운세,
+      대운전체: r.대운.map(d => `${d.시작나이}~${d.끝나이}세 ${d.간지} ${d.종합}`) };
+  if (kind === '대운')
+    return { ...base, 범위: `지금 대운 10년 — ${r.대운[idx].간지}`,
+      현재대운: r.대운[idx], 대운영역: r.대운영역 ? r.대운영역[idx] : null,
+      다음대운: r.대운[idx + 1] || null,
+      다음대운영역: r.대운영역 ? r.대운영역[idx + 1] : null,
+      지난대운: idx > 0 ? r.대운[idx - 1] : null,
+      격변화: r.격변화, 교운기: r.교운기,
+      이구간세운: (r.세운 || []).slice(0, 6) };
+  if (kind === '올해') {
+    const y = new Date().getFullYear();
+    const 올 = (r.세운 || []).find(s => s.연도 === y) || (r.세운 || [])[0];
+    return { ...base, 범위: `${y}년 한 해`, 올해: 올,
+      현재대운: r.대운[idx], 대운영역: r.대운영역 ? r.대운영역[idx] : null,
+      올해열두달: r.월운 || [], 내년: (r.세운 || []).find(s => s.연도 === y + 1) || null,
+      삼재: 올 && 올.삼재 ? 올.삼재 : null };
+  }
+  // 이번 달
+  const now = new Date();
+  const 이번 = (r.월운 || []).find(x => {
+    const s = new Date(x.시작), e = new Date(x.끝);
+    return now >= s && now <= e;
+  }) || (r.월운 || [])[now.getMonth()];
+  return { ...base, 범위: `${now.getMonth() + 1}월 한 달`, 이번달: 이번,
+    앞뒤달: (r.월운 || []).filter(x => Math.abs(x.월차 - (이번 ? 이번.월차 : 0)) === 1),
+    올해: (r.세운 || [])[0] || null, 오늘: r.일운 || null,
+    현재대운: r.대운[idx] };
+}
+
+async function runScope(kind, r, callLLM, opts = {}) {
+  const a = AGENTS.find(x => x.id === 'beomwi');
+  const onProgress = opts.onProgress;
+  onProgress && onProgress({ type: 'wave-start', agents: [a.name] });
+  const out = await runAgent(a, scopePacket(kind, r), callLLM, opts);
+  onProgress && onProgress({ type: 'agent-done', id: a.id, name: a.name, ok: !out.__error,
+    사유: out.__error ? String(out.__error) : null });
+  const facts = factSet(r), nums = numberSet(r, null);
+  let issues = out.__error ? []
+    : guard('beomwi', out, facts, nums, { '인비': r.strength.allyPct })
+        .concat(checkPositions(JSON.stringify(out), r.saju, 'beomwi'))
+        .concat(checkAdvice(out.지금할것, 'beomwi'))
+        .concat(checkHeadline(out, 'beomwi'))
+        .concat(checkPlainWords(out, 'beomwi'))
+        .concat(checkPastDates(JSON.stringify(out.지금할것 || []), 'beomwi'));
+  return { 결과: { 제목: out.제목 || kind + ' 풀이', 한줄요약: out.한줄요약 || '',
+                  본문: out.본문 || [], 실행요약: out.지금할것 || [],
+                  한계: out.한계 || '사주는 경향을 읽는 도구입니다. 앞일을 정해주지 않습니다.' },
+           원본: out, 검증: { 코드가드: issues },
+           품질: { 지적건수: issues.length, 최종가드: 0, 통과: issues.length === 0 } };
 }
 
 /* ---------- 상담 ----------
@@ -4774,7 +4865,7 @@ function makeClaudeCaller({ model = 'claude-sonnet-4-6', maxTokens = 1600, fetch
   };
 }
 
-module.exports = { runReading, runMatch, runFortune, runTarot, runConsult, runAgent, runWave, guard, factSet, numberSet, checkNumbers,
+module.exports = { runReading, runMatch, runFortune, runTarot, runConsult, runScope, runAgent, runWave, guard, factSet, numberSet, checkNumbers,
                    parseJSON, makeClaudeCaller, BANNED };
 
 return module.exports; })();
